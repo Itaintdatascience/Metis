@@ -25,8 +25,10 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+from sklearn import metrics
 # from sklearn.metrics.pairwise import cosine_similarity
 import os
+from bson import ObjectId
 # Get the current working directory
 cwd = os.getcwd()
 
@@ -74,19 +76,19 @@ Predict Star Rating based on Input Text Payload!
 
 client = MongoClient()
 # client.list_database_names()
-db = client.yelp_reviews
-collection = db.yelp_reviews
+db = client.yelpdb
+collection = db.reviews
 
 
 
 
 
-NUM_REVIEWS = 100000
+NUM_REVIEWS_EACH = 50000
 
-@st.cache
+@st.cache()
 def load_data():
-    df_rw_good = pd.DataFrame(list(collection.find({"stars":{"$gte":4}}, {"text": 1, 'stars':1}).limit(NUM_REVIEWS)))
-    df_rw_bad = pd.DataFrame(list(collection.find({"stars":{"$lte":3}}, {"text": 1, 'stars':1}).limit(NUM_REVIEWS)))
+    df_rw_good = pd.DataFrame(list(collection.find({"stars":{"$gte":4}}, {"text": 1, 'stars':1}).limit(NUM_REVIEWS_EACH)))
+    df_rw_bad = pd.DataFrame(list(collection.find({"stars":{"$lte":3}}, {"text": 1, 'stars':1}).limit(NUM_REVIEWS_EACH)))
     df_rw = pd.concat([df_rw_bad, df_rw_good], axis=0)
     del df_rw_bad
     del df_rw_good
@@ -122,7 +124,7 @@ df_rw, X_train, X_test, y_train, y_test, X, y = load_data()
 
 
 use_example_model = st.checkbox(
-    "Use example model", True, help="Use in-built example model to demo the app"
+    "Use example model", True, help="Use pre-built example model to demo the app"
 )
 
 
@@ -137,9 +139,10 @@ if use_example_model:
     # plot learning curve
     # https://scikit-learn.org/stable/auto_examples/model_selection/plot_learning_curve.html
 
-
-    st.dataframe(df_rw.head(5), )
-
+    st.write("Examples of Bad Reviews: ")
+    st.dataframe(df_rw[df_rw.target == 0].drop('_id', axis=1).sample(n = 5))
+    st.write("Examples of Good Reviews: ")
+    st.dataframe(df_rw[df_rw.target == 1].drop('_id', axis=1).sample(n = 5))
 
 
     ###### CREATE TEXT INPUT FIELD ######
@@ -152,20 +155,63 @@ if use_example_model:
 
     st.write(
     '''
-    ### Good or Bad review?
+    ## Predict if this is a Good or Bad review:
     '''
     )
 
     output = clf.predict(a)[0]
     st.write("Probability:")
     st.write(pd.DataFrame(clf.predict_proba(a), columns = ['prob_Bad', 'prob_Good']))
+    
+    # output_dict = {"Good Review": 1, "Bad Review": 0}
 
     if output == 1:
-        st.write("Good Review!")
+        output_str = "Good Review"
+        st.write("{}!".format(output_str))
     else:
-        st.write("Bad Review.. 🧐")
+        output_str = "Bad Review"
+        st.write("{}.. 🧐".format(output_str))
 
 
+
+    if text_input:
+        # Do you Agree with the review?
+        # Collect Text Input
+        client = MongoClient()
+        db_feedback = client.yelpdb_feedback
+        collection_feedback = db_feedback.reviews
+
+        mydict = { "text": text_input, "target": output.astype(str)}
+
+        x = collection_feedback.insert_one(mydict)
+        x_id = x.inserted_id
+
+        # GATHER FEEDBACK. Update document if the "target" is incorrect per user feedback!
+        st.write("Do you think the prediction is correct? If not, please provide feedback: ")
+        # FEEDBACK = (0, 1) dropdown bar (0 for "Bad Review", 1 for "Good Review")
+        feedback = st.selectbox('Pick one', ['Bad Review', 'Good Review'])
+        
+
+        if feedback == "Bad Review":
+            doc = collection_feedback.find_one_and_update(
+            {"text" : text_input, "_id" : ObjectId(x_id)},
+            {"$set":
+                {"target": 0}
+            },upsert=True
+            )
+        else:
+            doc = collection_feedback.find_one_and_update(
+            {"text" : text_input, "_id" : ObjectId(x_id)},
+            {"$set":
+                {"target": 1}
+            },upsert=True
+            )
+
+    featureImportance = pd.DataFrame(data = np.transpose((clf.fit(X_train_dtm, y_train).coef_).astype("float32")), columns = ['featureImportance'], 
+             index=vect.get_feature_names()).sort_values('featureImportance').reset_index()
+
+    st.dataframe(featureImportance.head())
+    st.dataframe(featureImportance.tail())
 
 
     st.write(
@@ -195,37 +241,19 @@ if use_example_model:
     )
 
 
-    # from sklearn.inspection import permutation_importance
-
-    # imps = permutation_importance(cnb, X_test, y_test)
-    # importances = imps.importances_mean
-    # std = imps.importances_std
-    # indices = np.argsort(importances)[::-1]
-
-    # # Print the feature ranking
-    # print("Feature ranking:")
-    # for f in range(X_test.shape[1]):
-    #     print("%d. %s (%f)" % (f + 1, features[indices[f]], importances[indices[f]]))
-
 
 
 
 
 else:
-    st.dataframe(df_rw.head())
 
     # X_train_dtm = vect.fit_transform(X_train)
     # X_test_dtm = vect.transform(X_test)
-
     # st.write("test")
     # st.write(X_train_dtm.shape)
-
     # nb = MultinomialNB()
     # clf = nb.fit(X_train_dtm, y_train)
-
     # y_pred_class = nb.predict(X_test_dtm)
-
-
     # st.write(metrics.accuracy_score(y_test, y_pred_class))
     # Build custom NB model:
     vect = CountVectorizer(
@@ -234,15 +262,15 @@ else:
                       max_features=10000
                 )
 
-
+    # max_features = st.sidebar.dropdown 
 
     # # Sidebar items:
-    st.sidebar.markdown("# Controls") # Must be .markdown method, not .write method
+    st.sidebar.markdown("# Controls")
 
-    with st.sidebar:
-        pick_model = st.sidebar.selectbox(
-        "Pick a Classifier Model: ",
-        ("MultinomialNB", "Logistic Regression"))
+
+    pick_model = st.sidebar.selectbox(
+    "Pick a Classifier Model: ",
+    ("MultinomialNB", "Logistic Regression"))   
 
 
     if pick_model == "MultinomialNB":
@@ -255,8 +283,9 @@ else:
         y_pred_class = nb.predict(X_test_dtm)
         st.write("Training Score: ", nb.score(X_train_dtm, y_train))
         st.write("Testing Score: ", nb.score(X_test_dtm, y_test))
-        # st.write(metrics.accuracy_score(y_test, y_pred_class))
+        st.write(metrics.accuracy_score(y_test, y_pred_class))
 
+        # Create a button for exporting out pickle file!
         # with open(cwd+'/model_files/custom_classifier', 'wb') as picklefile:
         #     pickle.dump(clf, picklefile)
 
@@ -270,7 +299,7 @@ else:
         y_pred_class = lr.predict(X_test_dtm)
         st.write("Training Score: ", lr.score(X_train_dtm, y_train))
         st.write("Testing Score: ", lr.score(X_test_dtm, y_test))
-        # st.write(metrics.accuracy_score(y_test, y_pred_class))
+        st.write(metrics.accuracy_score(y_test, y_pred_class))
 
         # with open(cwd+'/model_files/custom_classifier', 'wb') as picklefile:
         #     pickle.dump(clf, picklefile)
