@@ -58,15 +58,17 @@ vect = CountVectorizer(
             )
 
 
-# def get_feature_importance(item, VECT, FeatImportance):
-#     payload_features = pd.DataFrame(item.toarray(), columns=VECT.get_feature_names(), index=['values']).T
-#     payload_features = payload_features[payload_features.values>0].reset_index()    
-#     payload_features.columns = ['tokens', 'values'] 
-#     good_features = FeatImportance.merge(payload_features['tokens'], on="tokens", how='inner').sort_values('featureImportance', ascending=False)
-#     # Positive Features will be on top (hence ".head()"). Negative Features (".tail()")
-#     st.write('Here are the outstanding features: ')
-#     # st.write(good_features['index'].values)
-#     return good_features
+def get_feature_importance(PAYLOAD_TEXT, VECT, X_TRAIN_DTM, Y_TRAIN):
+
+    featureImportance = pd.DataFrame(data = np.transpose((clf.fit(X_TRAIN_DTM, Y_TRAIN).coef_).astype("float32")), columns = ['featureImportance'], 
+             index=VECT.get_feature_names()).reset_index()
+    featureImportance.columns = ['tokens', 'featureImportance']
+    payload_features = pd.DataFrame(VECT.transform([PAYLOAD_TEXT]).toarray(), columns=VECT.get_feature_names(), index=['values']).T
+    payload_features = payload_features[payload_features.values>0].reset_index()    
+    payload_features.columns = ['tokens', 'values']
+    good_features = featureImportance.merge(payload_features['tokens'], on="tokens", how='inner').sort_values('featureImportance', ascending=False)
+
+    return good_features
 
 
 
@@ -141,7 +143,7 @@ use_example_model = st.checkbox(
 # and pass them down to the next if block
 if use_example_model:
 
-    # Load pre-trained model files:
+    # clf is a nb classifier. Load pre-trained model files:
     clf = load_classifier()
     vect = load_vect()
 
@@ -160,8 +162,8 @@ if use_example_model:
     '''
     )
 
-    ###### CREATE TEXT INPUT FIELD ######
-    # st.text_area("label", height=10)
+    ###### CREATE TEXT INPUT FIELD FOR PAYLOAD TESTING ######
+
     text_input = st.text_input("What have you heard about this place?:")
     st.write(text_input)
     payload_transformed = vect.transform([text_input])
@@ -212,28 +214,16 @@ if use_example_model:
             },upsert=True
             )
 
-        X_train_dtm = vect.fit_transform(X_train)
-        featureImportance = pd.DataFrame(data = np.transpose((clf.fit(X_train_dtm, y_train).coef_).astype("float32")), columns = ['featureImportance'], 
-                 index=vect.get_feature_names()).sort_values('featureImportance').reset_index()
-        featureImportance.columns = ['tokens', 'featureImportance']
 
+        X_train_dtm = vect.fit_transform(X_train)
+        # st.dataframe(get_feature_importance(text_input, vect, X_train_dtm, y_train))
+    
 
         if output_str == "Bad Review":
-            # st.dataframe(featureImportance.head())
-            # st.dataframe(featureImportance.tail())
-            st.write(payload_transformed)
-            st.write(payload_transformed.toarray())
+            st.dataframe(get_feature_importance(text_input, vect, X_train_dtm, y_train).tail(50))
 
-            payload_features = pd.DataFrame(vect.transform([text_input]).toarray(), columns=vect.get_feature_names(), index=['values']).T
-            payload_features = payload_features[payload_features.values>0].reset_index()    
-            payload_features.columns = ['tokens', 'values'] 
-            st.dataframe(payload_features)
-            good_features = featureImportance.merge(payload_features['tokens'], on="tokens", how='inner').sort_values('featureImportance', ascending=False)
-            # st.write(get_feature_importance(payload_transformed, vect, featureImportance).tail(100).values)
         else:
-            print ("hihi")
-            # st.write(get_feature_importance(payload_transformed, vect, featureImportance).head(100).values)
-
+            st.dataframe(get_feature_importance(text_input, vect, X_train_dtm, y_train).head(50))
 
 
     # # -- Allow dataframe download. We want to include the 
@@ -246,38 +236,7 @@ if use_example_model:
     # st.markdown(href, unsafe_allow_html=True)
 
 
-
-
-    # st.write(
-    # '''
-    # ### How to adjust model parameters to get even smarter...
-
-
-
-    # 2nd LEVEL ADD FEEDBACK LOOP.. 
-    # This was a miss. how to re-learn (what was wrong about this?)
-
-    # "i love the everything but the kitchen sink pizza"..
-
-
-    # Create an auto-update ID for each unique row to append
-    # check in MongoDB
-
-    # User imput of columns
-    # - read if you already have a row for this, if not.. then add in a simple "update feedback" 
-
-    # - unique text comment vs. text id..
-
-    # - Feature Importance (NB)??? What does it look like for the Text Input?
-    # https://blog.ineuron.ai/Feature-Importance-in-Naive-Bayes-Classifiers-5qob5d5sFW#:~:text=The%20naive%20bayes%20classifers%20don,class%20with%20the%20highest%20probability.
-
-    # '''
-    # )
-
-
-
-
-
+# BUILD YOUR OWN MODEL SECTION:
 
 else:
 
@@ -361,16 +320,13 @@ else:
             output_str = "Bad Review"
             st.write("This is a `{}`.. 🧐".format(output_str))
 
-        featureImportance = pd.DataFrame(data = np.transpose((clf.fit(X_train_dtm, y_train).coef_).astype("float32")), columns = ['featureImportance'], 
-                 index=vect.get_feature_names()).sort_values('featureImportance').reset_index()
-
 
         if output_str == "Bad Review":
 
-            st.write(get_feature_importance(a, vect, featureImportance).tail(10).values)
+            st.write(get_feature_importance(text_input, vect, X_train_dtm, y_train).tail(10).values)
         else:
 
-            st.write(get_feature_importance(a, vect, featureImportance).head(10).values)
+            st.write(get_feature_importance(text_input, vect, X_train_dtm, y_train).head(10).values)
 
 
 
@@ -381,11 +337,16 @@ else:
             # Build custom NB model:
         build_nb = build_model(nb)
         
-    
+        
+        with open(cwd+'/model_files/custom_classifier', 'wb') as picklefile:
+            pickle.dump(clf, picklefile)
+
+
     elif pick_model == "Logistic Regression":
         lr = LogisticRegression()
         build_lr = build_model(lr)
         # st.write(vect.get_feature_names()[-10:])
+
 
 
 
@@ -423,8 +384,39 @@ else:
 
 
 
-        # with open(cwd+'/model_files/custom_classifier', 'wb') as picklefile:
-        #     pickle.dump(clf, picklefile)
+
+
+
+
+    # st.write(
+    # '''
+    # ### How to adjust model parameters to get even smarter...
+
+
+
+    # 2nd LEVEL ADD FEEDBACK LOOP.. 
+    # This was a miss. how to re-learn (what was wrong about this?)
+
+    # "i love the everything but the kitchen sink pizza"..
+
+
+    # Create an auto-update ID for each unique row to append
+    # check in MongoDB
+
+    # User imput of columns
+    # - read if you already have a row for this, if not.. then add in a simple "update feedback" 
+
+    # - unique text comment vs. text id..
+
+    # - Feature Importance (NB)??? What does it look like for the Text Input?
+    # https://blog.ineuron.ai/Feature-Importance-in-Naive-Bayes-Classifiers-5qob5d5sFW#:~:text=The%20naive%20bayes%20classifers%20don,class%20with%20the%20highest%20probability.
+
+    # '''
+    # )
+
+
+
+
 
 
 
