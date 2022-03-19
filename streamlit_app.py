@@ -17,6 +17,9 @@ from sklearn.metrics import confusion_matrix
 # import requests
 # import matplotlib.pyplot as plt
 
+# https://scikit-learn.org/stable/modules/naive_bayes.html
+
+
 # Get the current working directory
 cwd = os.getcwd()
 
@@ -55,6 +58,18 @@ vect = CountVectorizer(
             )
 
 
+# def get_feature_importance(item, VECT, FeatImportance):
+#     payload_features = pd.DataFrame(item.toarray(), columns=VECT.get_feature_names(), index=['values']).T
+#     payload_features = payload_features[payload_features.values>0].reset_index()    
+#     payload_features.columns = ['tokens', 'values'] 
+#     good_features = FeatImportance.merge(payload_features['tokens'], on="tokens", how='inner').sort_values('featureImportance', ascending=False)
+#     # Positive Features will be on top (hence ".head()"). Negative Features (".tail()")
+#     st.write('Here are the outstanding features: ')
+#     # st.write(good_features['index'].values)
+#     return good_features
+
+
+
 st.write(
 '''
 # Data Engineering (March 2022)
@@ -77,10 +92,10 @@ collection = db.reviews
 
 
 
-NUM_REVIEWS_EACH = 50000
+n_good_bad_samples = 50000
 
 @st.cache()
-def load_data():
+def load_data(NUM_REVIEWS_EACH):
     df_rw_good = pd.DataFrame(list(collection.find({"stars":{"$gte":4}}, {"text": 1, 'stars':1}).limit(NUM_REVIEWS_EACH)))
     df_rw_bad = pd.DataFrame(list(collection.find({"stars":{"$lte":3}}, {"text": 1, 'stars':1}).limit(NUM_REVIEWS_EACH)))
     df_rw = pd.concat([df_rw_bad, df_rw_good], axis=0)
@@ -112,7 +127,7 @@ def load_data():
 
     return df_rw, X_train, X_test, y_train, y_test, X, y
 
-df_rw, X_train, X_test, y_train, y_test, X, y = load_data()
+df_rw, X_train, X_test, y_train, y_test, X, y = load_data(n_good_bad_samples)
 
 
 
@@ -149,13 +164,12 @@ if use_example_model:
     # st.text_area("label", height=10)
     text_input = st.text_input("What have you heard about this place?:")
     st.write(text_input)
-    a = vect.transform([text_input])
+    payload_transformed = vect.transform([text_input])
 
-    output = clf.predict(a)[0]
+    output = clf.predict(payload_transformed)[0]
     st.write("Probability:")
-    st.write(pd.DataFrame(clf.predict_proba(a), columns = ['prob_Bad', 'prob_Good']))
+    st.write(pd.DataFrame(clf.predict_proba(payload_transformed), columns = ['prob_Bad', 'prob_Good']))
 
-    # output_dict = {"Good Review": 1, "Bad Review": 0}
 
     if output == 1:
         output_str = "Good Review"
@@ -183,7 +197,6 @@ if use_example_model:
         # FEEDBACK = (0, 1) dropdown bar (0 for "Bad Review", 1 for "Good Review")
         feedback = st.selectbox('Pick one', ['Bad Review', 'Good Review'])
         
-
         if feedback == "Bad Review":
             doc = collection_feedback.find_one_and_update(
             {"text" : text_input, "_id" : ObjectId(x_id)},
@@ -202,14 +215,24 @@ if use_example_model:
         X_train_dtm = vect.fit_transform(X_train)
         featureImportance = pd.DataFrame(data = np.transpose((clf.fit(X_train_dtm, y_train).coef_).astype("float32")), columns = ['featureImportance'], 
                  index=vect.get_feature_names()).sort_values('featureImportance').reset_index()
+        featureImportance.columns = ['tokens', 'featureImportance']
 
-        payload_features = pd.DataFrame(a.toarray(), columns=vect.get_feature_names(), index=['values']).T
-        payload_features = payload_features.reset_index()        
-        good_features = featureImportance.merge(payload_features['index'], on="index", how='inner').sort_values('featureImportance').tail(20)
-        st.write('Here are the good features: ')
-        st.dataframe(good_features)
-        # st.dataframe(featureImportance.head())
-        # st.dataframe(featureImportance.tail())
+
+        if output_str == "Bad Review":
+            # st.dataframe(featureImportance.head())
+            # st.dataframe(featureImportance.tail())
+            st.write(payload_transformed)
+            st.write(payload_transformed.toarray())
+
+            payload_features = pd.DataFrame(vect.transform([text_input]).toarray(), columns=vect.get_feature_names(), index=['values']).T
+            payload_features = payload_features[payload_features.values>0].reset_index()    
+            payload_features.columns = ['tokens', 'values'] 
+            st.dataframe(payload_features)
+            good_features = featureImportance.merge(payload_features['tokens'], on="tokens", how='inner').sort_values('featureImportance', ascending=False)
+            # st.write(get_feature_importance(payload_transformed, vect, featureImportance).tail(100).values)
+        else:
+            print ("hihi")
+            # st.write(get_feature_importance(payload_transformed, vect, featureImportance).head(100).values)
 
 
 
@@ -278,6 +301,7 @@ else:
     
         return params
 
+    df_rw, X_train, X_test, y_train, y_test, X, y = load_data(n_good_bad_samples)
 
     params = add_parameter(pick_model)
 
@@ -325,6 +349,7 @@ else:
 
         output = clf.predict(a)[0]
         st.write("Probability:")
+        # Return probability estimates for the test vector X.
         st.write(pd.DataFrame(clf.predict_proba(a), columns = ['prob_Bad', 'prob_Good']))
         
         # output_dict = {"Good Review": 1, "Bad Review": 0}
@@ -336,18 +361,31 @@ else:
             output_str = "Bad Review"
             st.write("This is a `{}`.. 🧐".format(output_str))
 
+        featureImportance = pd.DataFrame(data = np.transpose((clf.fit(X_train_dtm, y_train).coef_).astype("float32")), columns = ['featureImportance'], 
+                 index=vect.get_feature_names()).sort_values('featureImportance').reset_index()
+
+
+        if output_str == "Bad Review":
+
+            st.write(get_feature_importance(a, vect, featureImportance).tail(10).values)
+        else:
+
+            st.write(get_feature_importance(a, vect, featureImportance).head(10).values)
+
+
+
 
     
     if pick_model == "MultinomialNB":
         nb = MultinomialNB()
             # Build custom NB model:
         build_nb = build_model(nb)
-        st.write(vect.get_feature_names()[-10:])
+        
     
     elif pick_model == "Logistic Regression":
         lr = LogisticRegression()
         build_lr = build_model(lr)
-        st.write(vect.get_feature_names()[-10:])
+        # st.write(vect.get_feature_names()[-10:])
 
 
 
