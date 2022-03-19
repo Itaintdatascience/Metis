@@ -1,37 +1,31 @@
-
-"""
-Streamlit Housing App Demo
-    
-Make sure to install Streamlit with `pip install streamlit`.
-
-Run `streamlit hello` to get started!
-
-To run this app:
-
-1. cd into this directory
-2. Run `streamlit run streamlit_app.py`
-"""
-
-# import matplotlib.pyplot as plt
+import os
+import pickle
+import numpy as np
 import pandas as pd
 import streamlit as st
-from pymongo import MongoClient
-# import requests
-import numpy as np
-import pickle
+from bson import ObjectId
 from textblob import TextBlob
+from pymongo import MongoClient
 from sklearn.feature_extraction.text import CountVectorizer #, TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from sklearn import metrics
+from sklearn.metrics import confusion_matrix
 # from sklearn.metrics.pairwise import cosine_similarity
-import os
-from bson import ObjectId
+# import requests
+# import matplotlib.pyplot as plt
+
 # Get the current working directory
 cwd = os.getcwd()
 
+st.set_page_config(
+    page_title="Ex-stream-ly Cool App",
+    page_icon="🧊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 
 def load_classifier():
@@ -61,25 +55,25 @@ vect = CountVectorizer(
             )
 
 
-
-
 st.write(
 '''
 # Data Engineering (March 2022)
 ### *Yelp Star Rating Classifier - Yelp Dataset*
-Predict Star Rating based on Input Text Payload!
+Maybe you've heard about a restaurant that you've been wanting to try. You've heard comments from friends and family, but don't quite trust their opinion! 
+Given a sample of text, we try to predict if this will be a good or bad review. 
+Sample the out of the box model that is already pre-trained, or learn how to build a text classifier model on your own!
 
 [Additional info on the dataset](https://yelp.com/dataset/)
 
 '''
 )
 
+
+# Connect to MongoDB
 client = MongoClient()
 # client.list_database_names()
 db = client.yelpdb
 collection = db.reviews
-
-
 
 
 
@@ -105,7 +99,7 @@ def load_data():
         else:
             return 0
 
-        
+
 
     df_rw['stars'] = df_rw['stars'].astype(float)
     df_rw['target'] = df_rw['stars'].apply(good_bad_review)
@@ -138,20 +132,12 @@ if use_example_model:
 
     # plot learning curve
     # https://scikit-learn.org/stable/auto_examples/model_selection/plot_learning_curve.html
+    col1, col2 = st.columns((1,1))
 
-    st.write("Examples of Bad Reviews: ")
-    st.dataframe(df_rw[df_rw.target == 0].drop('_id', axis=1).sample(n = 5))
-    st.write("Examples of Good Reviews: ")
-    st.dataframe(df_rw[df_rw.target == 1].drop('_id', axis=1).sample(n = 5))
-
-
-    ###### CREATE TEXT INPUT FIELD ######
-    # st.text_area("label", height=10)
-    text_input = "This place is nice. It was crowded but the line moved really fast and the food came out quickly too. It had a wide variety of items on the the menu. The food however wasn't anything special for the price and sides are not included so a burger with fries and cost upwards of $10 adding a drink and tax and it's close to $15. The patio seating area provides a nice environment to eat in but you have to watch out for the birds and bugs. All in all it was a nice place I'd eat here again if I had to but it wouldn't be my #1 choice."
-    text_input = st.text_input("What have you heard about this place?:")
-    st.write(text_input)
-    a = vect.transform([text_input])
-
+    col1.write("Examples of Bad Reviews: ")
+    col1.write(df_rw[df_rw.target == 0]['text'].sample(n = 1).values[0])
+    col2.write("Examples of Good Reviews: ")
+    col2.write(df_rw[df_rw.target == 1]['text'].sample(n = 1).values[0])
 
     st.write(
     '''
@@ -159,18 +145,24 @@ if use_example_model:
     '''
     )
 
+    ###### CREATE TEXT INPUT FIELD ######
+    # st.text_area("label", height=10)
+    text_input = st.text_input("What have you heard about this place?:")
+    st.write(text_input)
+    a = vect.transform([text_input])
+
     output = clf.predict(a)[0]
     st.write("Probability:")
     st.write(pd.DataFrame(clf.predict_proba(a), columns = ['prob_Bad', 'prob_Good']))
-    
+
     # output_dict = {"Good Review": 1, "Bad Review": 0}
 
     if output == 1:
         output_str = "Good Review"
-        st.write("{}!".format(output_str))
+        st.write("This is a `{}`!".format(output_str))
     else:
         output_str = "Bad Review"
-        st.write("{}.. 🧐".format(output_str))
+        st.write("This is a `{}`.. 🧐".format(output_str))
 
 
 
@@ -207,38 +199,57 @@ if use_example_model:
             },upsert=True
             )
 
-    featureImportance = pd.DataFrame(data = np.transpose((clf.fit(X_train_dtm, y_train).coef_).astype("float32")), columns = ['featureImportance'], 
-             index=vect.get_feature_names()).sort_values('featureImportance').reset_index()
+        X_train_dtm = vect.fit_transform(X_train)
+        featureImportance = pd.DataFrame(data = np.transpose((clf.fit(X_train_dtm, y_train).coef_).astype("float32")), columns = ['featureImportance'], 
+                 index=vect.get_feature_names()).sort_values('featureImportance').reset_index()
 
-    st.dataframe(featureImportance.head())
-    st.dataframe(featureImportance.tail())
-
-
-    st.write(
-    '''
-    ### How to adjust model parameters to get even smarter...
-
-
-
-    2nd LEVEL ADD FEEDBACK LOOP.. 
-    This was a miss. how to re-learn (what was wrong about this?)
-
-    "i love the everything but the kitchen sink pizza"..
+        payload_features = pd.DataFrame(a.toarray(), columns=vect.get_feature_names(), index=['values']).T
+        payload_features = payload_features.reset_index()        
+        good_features = featureImportance.merge(payload_features['index'], on="index", how='inner').sort_values('featureImportance').tail(20)
+        st.write('Here are the good features: ')
+        st.dataframe(good_features)
+        # st.dataframe(featureImportance.head())
+        # st.dataframe(featureImportance.tail())
 
 
-    Create an auto-update ID for each unique row to append
-    check in MongoDB
 
-    User imput of columns
-    - read if you already have a row for this, if not.. then add in a simple "update feedback" 
+    # # -- Allow dataframe download. We want to include the 
+    # download = {'Time':bp_cropped.times, 'Strain':bp_cropped.value}
+    # df = pd.DataFrame(download)
+    # csv = df.to_csv(index=False)
+    # b64 = base64.b64encode(csv.encode()).decode()  # some strings <-> bytes conversions necessary here
+    # fn =  detector + '-STRAIN' + '-' + str(int(cropstart)) + '-' + str(int(cropend-cropstart)) + '.csv'
+    # href = f'<a href="data:file/csv;base64,{b64}" download="{fn}">Download Data as CSV File</a>'
+    # st.markdown(href, unsafe_allow_html=True)
 
-    - unique text comment vs. text id..
 
-    - Feature Importance (NB)??? What does it look like for the Text Input?
-    https://blog.ineuron.ai/Feature-Importance-in-Naive-Bayes-Classifiers-5qob5d5sFW#:~:text=The%20naive%20bayes%20classifers%20don,class%20with%20the%20highest%20probability.
 
-    '''
-    )
+
+    # st.write(
+    # '''
+    # ### How to adjust model parameters to get even smarter...
+
+
+
+    # 2nd LEVEL ADD FEEDBACK LOOP.. 
+    # This was a miss. how to re-learn (what was wrong about this?)
+
+    # "i love the everything but the kitchen sink pizza"..
+
+
+    # Create an auto-update ID for each unique row to append
+    # check in MongoDB
+
+    # User imput of columns
+    # - read if you already have a row for this, if not.. then add in a simple "update feedback" 
+
+    # - unique text comment vs. text id..
+
+    # - Feature Importance (NB)??? What does it look like for the Text Input?
+    # https://blog.ineuron.ai/Feature-Importance-in-Naive-Bayes-Classifiers-5qob5d5sFW#:~:text=The%20naive%20bayes%20classifers%20don,class%20with%20the%20highest%20probability.
+
+    # '''
+    # )
 
 
 
@@ -247,59 +258,132 @@ if use_example_model:
 
 else:
 
-    # X_train_dtm = vect.fit_transform(X_train)
-    # X_test_dtm = vect.transform(X_test)
-    # st.write("test")
-    # st.write(X_train_dtm.shape)
-    # nb = MultinomialNB()
-    # clf = nb.fit(X_train_dtm, y_train)
-    # y_pred_class = nb.predict(X_test_dtm)
-    # st.write(metrics.accuracy_score(y_test, y_pred_class))
-    # Build custom NB model:
-    vect = CountVectorizer(
-                      stop_words="english", 
-                      analyzer=word_tokenize_lemma_verb,
-                      max_features=10000
-                )
-
-    # max_features = st.sidebar.dropdown 
-
     # # Sidebar items:
     st.sidebar.markdown("# Controls")
-
 
     pick_model = st.sidebar.selectbox(
     "Pick a Classifier Model: ",
     ("MultinomialNB", "Logistic Regression"))   
 
 
-    if pick_model == "MultinomialNB":
+    def add_parameter(clf_name):
 
+        params = {}
+        if pick_model == "MultinomialNB":
+            max_features = st.sidebar.slider("max_features", min_value=1, max_value=10000, value=10000)
+            params["max_features"] = max_features
+        elif pick_model == "Logistic Regression":
+            max_features = st.sidebar.slider("max_features", min_value=1, max_value=10000, value=10000)
+            params["max_features"] = max_features
+    
+        return params
+
+
+    params = add_parameter(pick_model)
+
+    bigram = st.sidebar.checkbox(
+        "Use Bigrams", True, help="Enable ngram feature: (2,2)"
+        )
+    if bigram:
+        params['ngram_range'] = (2,2)
+    else:
+        params['ngram_range'] = (1,1)
+
+    all_stars = df_rw.stars.unique().tolist()
+    stars = st.sidebar.multiselect(
+        "Stars", options=all_stars, default=all_stars
+    )
+
+    vect = CountVectorizer(
+                  stop_words="english", 
+                  # analyzer=word_tokenize_lemma_verb,
+                  max_features=params['max_features'],
+                  ngram_range=params['ngram_range']
+            )
+
+
+    def build_model(model):
         X_train_dtm = vect.fit_transform(X_train)
         X_test_dtm = vect.transform(X_test)
-        nb = MultinomialNB()
-        clf = nb.fit(X_train_dtm, y_train)
-
-        y_pred_class = nb.predict(X_test_dtm)
-        st.write("Training Score: ", nb.score(X_train_dtm, y_train))
-        st.write("Testing Score: ", nb.score(X_test_dtm, y_test))
-        st.write(metrics.accuracy_score(y_test, y_pred_class))
-
+        clf = model.fit(X_train_dtm, y_train)
+        st.write("Selected Model: `{}`".format(pick_model))
+        y_pred_class = model.predict(X_test_dtm)
+        st.write("Dataset shape: `{}`".format(df_rw.shape))
+        st.write("Testing Score: ", model.score(X_test_dtm, y_test))
+        st.dataframe(confusion_matrix(y_test, y_pred_class))
         # Create a button for exporting out pickle file!
         # with open(cwd+'/model_files/custom_classifier', 'wb') as picklefile:
         #     pickle.dump(clf, picklefile)
+        st.write(
+        '''
+        ## Predict if this is a Good or Bad review:
+        '''
+        )
+        text_input = st.text_input("What have you heard about this place?:")
+        st.write(text_input)
+        a = vect.transform([text_input])
+
+        output = clf.predict(a)[0]
+        st.write("Probability:")
+        st.write(pd.DataFrame(clf.predict_proba(a), columns = ['prob_Bad', 'prob_Good']))
+        
+        # output_dict = {"Good Review": 1, "Bad Review": 0}
+
+        if output == 1:
+            output_str = "Good Review"
+            st.write("This is a `{}`!".format(output_str))
+        else:
+            output_str = "Bad Review"
+            st.write("This is a `{}`.. 🧐".format(output_str))
 
 
+    
+    if pick_model == "MultinomialNB":
+        nb = MultinomialNB()
+            # Build custom NB model:
+        build_nb = build_model(nb)
+        st.write(vect.get_feature_names()[-10:])
+    
     elif pick_model == "Logistic Regression":
-        X_train_dtm = vect.fit_transform(X_train)
-        X_test_dtm = vect.transform(X_test)
         lr = LogisticRegression()
-        clf = lr.fit(X_train_dtm, y_train)
+        build_lr = build_model(lr)
+        st.write(vect.get_feature_names()[-10:])
 
-        y_pred_class = lr.predict(X_test_dtm)
-        st.write("Training Score: ", lr.score(X_train_dtm, y_train))
-        st.write("Testing Score: ", lr.score(X_test_dtm, y_test))
-        st.write(metrics.accuracy_score(y_test, y_pred_class))
+
+
+
+
+        # CONNECT TO STARS in SIDEBAR
+        # plot_df = _df[_df.lang.isin(langs)]
+        # plot_df["stars"] = plot_df.stars.divide(1000).round(1)
+
+        # chart = (
+        #     alt.Chart(
+        #         plot_df,
+        #         title="Static site generators popularity",
+        #     )
+        #     .mark_bar()
+        #     .encode(
+        #         x=alt.X("stars", title="'000 stars on Github"),
+        #         y=alt.Y(
+        #             "name",
+        #             sort=alt.EncodingSortField(field="stars", order="descending"),
+        #             title="",
+        #         ),
+        #         color=alt.Color(
+        #             "lang",
+        #             legend=alt.Legend(title="Language"),
+        #             scale=alt.Scale(scheme="category10"),
+        #         ),
+        #         tooltip=["name", "stars", "lang"],
+        #     )
+        # )
+
+
+        # st.altair_chart(chart, use_container_width=True)
+
+
+
 
         # with open(cwd+'/model_files/custom_classifier', 'wb') as picklefile:
         #     pickle.dump(clf, picklefile)
