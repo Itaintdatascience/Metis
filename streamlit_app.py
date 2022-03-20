@@ -75,7 +75,7 @@ def get_feature_importance(PAYLOAD_TEXT, VECT, X_TRAIN_DTM, Y_TRAIN):
 def download_model(model):
     output_model = pickle.dumps(model)
     b64 = base64.b64encode(output_model).decode()
-    href = f'<a href="data:file/output_model;base64,{b64}">Download_.pkl File</a> (right-click and save as &lt;some_name&gt;.pkl)'
+    href = f'<a href="data:file/output_model;base64,{b64}">Download_.pkl</a> (right-click and save as &lt;some_name&gt;.pkl)'
     st.markdown(href, unsafe_allow_html=True)
 
 
@@ -192,13 +192,13 @@ if use_example_model:
     st.write("Probability:")
     st.write(pd.DataFrame(clf.predict_proba(payload_transformed), columns = ['prob_Bad', 'prob_Good']))
 
-
-    if output == 1:
-        output_str = "Good Review"
-        st.write("This is a `{}`!".format(output_str))
-    else:
-        output_str = "Bad Review"
-        st.write("This is a `{}`.. 🧐".format(output_str))
+    if text_input:
+        if output == 1:
+            output_str = "Good Review"
+            st.write("This is a `{}`!".format(output_str))
+        else:
+            output_str = "Bad Review"
+            st.write("This is a `{}`.. 🧐".format(output_str))
 
 
 
@@ -306,10 +306,10 @@ else:
         params['lowercase'] = False
 
     bigram = st.sidebar.checkbox(
-        "Use Bigrams", False, help="Enable ngram feature: (2,2)"
+        "Use Bigrams", False, help="Enable ngram feature: (1,2)"
         )
     trigram = st.sidebar.checkbox(
-        "Use Trigrams", False, help="Enable ngram feature: (3,3)"
+        "Use Trigrams", False, help="Enable ngram feature: (1,3)"
         )
     if bigram:
         params['ngram_range'] = (1,2)
@@ -373,7 +373,7 @@ else:
         auc_score = roc_auc_score(y_test, test_probs)
         st.write("The Area Under the Curve (AUC) score is: `{}`".format(auc_score))
 
-        folds = st.sidebar.slider("Select nfolds:", 2, 10, 5)
+        folds = st.sidebar.slider("Select nfolds for Cross Validation:", 2, 10, 5)
         #Cross validated roc_auc score
         cv_score = cross_validate(clf, X_train_dtm, y_train, cv=folds, scoring="roc_auc")
         st.write("The Cross Validated (at {} folds) Area Under the Curve (AUC) score is: `{}`".format(folds,cv_score['test_score'].mean()))
