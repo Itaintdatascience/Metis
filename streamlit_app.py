@@ -1,6 +1,7 @@
 import os
 import pickle
 import numpy as np
+import base64
 import pandas as pd
 import streamlit as st
 from bson import ObjectId
@@ -71,7 +72,21 @@ def get_feature_importance(PAYLOAD_TEXT, VECT, X_TRAIN_DTM, Y_TRAIN):
     st.write("Here are the features of importance:")
     return good_features
 
-all_stars = [1.0, 2.0, 3.0, 4.0, 5.0]
+def download_model(model):
+    output_model = pickle.dumps(model)
+    b64 = base64.b64encode(output_model).decode()
+    href = f'<a href="data:file/output_model;base64,{b64}">Download_.pkl File</a> (right-click and save as &lt;some_name&gt;.pkl)'
+    st.markdown(href, unsafe_allow_html=True)
+
+
+@st.cache
+def convert_df(df):
+    # IMPORTANT: Cache the conversion to prevent computation on every rerun
+    return df.to_csv().encode('utf-8')
+
+
+
+all_stars = ['1.0', '2.0', '3.0', '4.0', 5.0]
 
 st.write(
 '''
@@ -94,7 +109,7 @@ db = client.yelpdb
 collection = db.reviews
 
 
-
+# default samples
 n_good_bad_samples = 25000
 
 @st.cache()
@@ -102,6 +117,7 @@ def load_data(NUM_REVIEWS_EACH, STARS):
     df_rw_good = pd.DataFrame(list(collection.find({"stars":{"$gte":4}}, {"text": 1, 'stars':1}).limit(NUM_REVIEWS_EACH)))
     df_rw_bad = pd.DataFrame(list(collection.find({"stars":{"$lte":3}}, {"text": 1, 'stars':1}).limit(NUM_REVIEWS_EACH)))
     df_rw = pd.concat([df_rw_bad, df_rw_good], axis=0)
+    df_rw.reset_index(inplace=True, drop=True)
     del df_rw_bad
     del df_rw_good
     df_rw = df_rw.astype(str)
@@ -279,6 +295,16 @@ else:
 
     params = add_parameter(pick_model)
 
+
+    lower = st.sidebar.checkbox(
+        "Lowercase", False, help="Lowercase tokens before training"
+        )
+
+    if lower:
+        params['lowercase'] = True
+    else:
+        params['lowercase'] = False
+
     bigram = st.sidebar.checkbox(
         "Use Bigrams", False, help="Enable ngram feature: (2,2)"
         )
@@ -298,6 +324,7 @@ else:
                   # stop_words="english", 
                   # analyzer=word_tokenize_lemma_verb,
                   # tokenizer = LemmaTokenizer(),
+                  lowercase = params['lowercase'],
                   max_features=params['max_features'],
                   ngram_range=params['ngram_range']
 
@@ -312,22 +339,35 @@ else:
         y_pred_class = model.predict(X_test_dtm)
         st.write("Dataset shape: `{}`".format(df_rw.shape))
         st.write("Testing Score: ", model.score(X_test_dtm, y_test))
+        st.write("Confusion Matrix:")
         st.dataframe(confusion_matrix(y_test, y_pred_class))
 
+
+
+        col1, col2 = st.columns((1,1))
         #Derive probabilities of class 1 from the test set
         test_probs = clf.predict_proba(X_test_dtm)[:,1]
         #Pass in the test_probs variable and the true test labels aka y_test in the roc_curve function
         fpr, tpr, thres = metrics.roc_curve(y_test, test_probs)
         #Plotting False Positive Rates vs the True Positive Rates
         #Dotted line represents a useless model
-        fig, ax = plt.subplots()
+        fig1, ax = plt.subplots()
         plt.plot(fpr, tpr, linewidth= 5, c='c', alpha= 0.5)
         #Line of randomness
         plt.plot([0,1], [0,1], "--", alpha=.5, c='m')
         plt.xlabel("False Positive Rate")
         plt.ylabel("True Positive Rate")
         plt.title("ROC Curve")
-        st.pyplot(fig, figsize=(3, 5))
+        col1.pyplot(fig1, figsize=(1.5, 2.5))
+
+        fig2, ax = plt.subplots()
+        plt.plot(thres, fpr, linewidth=5, label = "FPR Line", alpha=0.5, c='m')
+        plt.plot(thres, tpr, linewidth=5, label = "TPR line", alpha=0.5, c='c')
+        plt.xlabel("Thresholds")
+        plt.ylabel("False Positive Rate")
+        plt.legend()
+        col2.pyplot(fig2, figsize=(1.5, 2.5))
+
 
         #Caculate the area under the curve score using roc_auc_score using SKLEARN. only work with Binary Classification
         auc_score = roc_auc_score(y_test, test_probs)
@@ -337,7 +377,6 @@ else:
         #Cross validated roc_auc score
         cv_score = cross_validate(clf, X_train_dtm, y_train, cv=folds, scoring="roc_auc")
         st.write("The Cross Validated (at {} folds) Area Under the Curve (AUC) score is: `{}`".format(folds,cv_score['test_score'].mean()))
-
 
         st.write(
         '''
@@ -371,12 +410,41 @@ else:
 
             st.dataframe(get_feature_importance(text_input, vect, X_train_dtm, y_train).head(50))
 
+        # Download pickle files for clf and vect:
+        download_model(clf)
+        download_model(vect)
         # Export model files to cwd folder:
-        with open(cwd+'/model_files/{}_custom_classifier'.format(pick_model), 'wb') as picklefile:
-            pickle.dump(clf, picklefile)
+        # with open(cwd+'/model_files/{}_custom_classifier'.format(pick_model), 'wb') as picklefile:
+        #     pickle.dump(clf, picklefile)
 
-        with open(cwd+'/model_files/{}_custom_classifier'.format(pick_model), 'wb') as picklefile:
-            pickle.dump(vect, picklefile)
+        # with open(cwd+'/model_files/{}_custom_classifier'.format(pick_model), 'wb') as picklefile:
+        #     pickle.dump(vect, picklefile)
+
+        # Build a dataframe with mis-classified items for feedback loop
+        misses = pd.DataFrame(X_test)
+        misses['proba_bad'] = clf.predict_proba(X_test_dtm)[:,0]
+        misses['proba_good'] = clf.predict_proba(X_test_dtm)[:,1]
+        misses['pred'] = y_pred_class
+        misses['actual'] = y_test
+        list_ix = []
+        for ix, k in misses.iterrows():
+            if k['actual'] != k['pred']:
+                list_ix.append(ix)
+        list_ix = list(set(list_ix))
+        test1 = misses[misses.index.isin(list_ix)]
+        test1.sort_index(inplace=True)
+        test2 = df_rw[df_rw.index.isin(list_ix)]
+        csv = convert_df(test1.merge(test2.drop('target', axis=1), how='inner'))
+
+
+        st.write(test2.stars.value_counts(normalize=False))
+        st.download_button(
+             label="Download all mis-classified",
+             data=csv,
+             file_name='misses_feedback.csv',
+             mime='text/csv',
+ )
+
 
     
     if pick_model == "MultinomialNB":
