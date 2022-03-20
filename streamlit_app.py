@@ -9,13 +9,14 @@ from pymongo import MongoClient
 from sklearn.feature_extraction.text import CountVectorizer #, TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split, cross_validate
+from sklearn.model_selection import cross_val_score
+from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn import metrics
 from sklearn.metrics import confusion_matrix
 # from sklearn.metrics.pairwise import cosine_similarity
 # import requests
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 # https://scikit-learn.org/stable/modules/naive_bayes.html
 
@@ -67,10 +68,10 @@ def get_feature_importance(PAYLOAD_TEXT, VECT, X_TRAIN_DTM, Y_TRAIN):
     payload_features = payload_features[payload_features.values>0].reset_index()    
     payload_features.columns = ['tokens', 'values']
     good_features = featureImportance.merge(payload_features['tokens'], on="tokens", how='inner').sort_values('featureImportance', ascending=False)
-
+    st.write("Here are the features of importance:")
     return good_features
 
-
+all_stars = [1.0, 2.0, 3.0, 4.0, 5.0]
 
 st.write(
 '''
@@ -94,16 +95,18 @@ collection = db.reviews
 
 
 
-n_good_bad_samples = 50000
+n_good_bad_samples = 25000
 
 @st.cache()
-def load_data(NUM_REVIEWS_EACH):
+def load_data(NUM_REVIEWS_EACH, STARS):
     df_rw_good = pd.DataFrame(list(collection.find({"stars":{"$gte":4}}, {"text": 1, 'stars':1}).limit(NUM_REVIEWS_EACH)))
     df_rw_bad = pd.DataFrame(list(collection.find({"stars":{"$lte":3}}, {"text": 1, 'stars':1}).limit(NUM_REVIEWS_EACH)))
     df_rw = pd.concat([df_rw_bad, df_rw_good], axis=0)
     del df_rw_bad
     del df_rw_good
     df_rw = df_rw.astype(str)
+    if len(STARS) < 5:
+        df_rw = df_rw[df_rw.stars.isin[STARS]]
 
     def good_bad_review(x):
         """
@@ -129,7 +132,7 @@ def load_data(NUM_REVIEWS_EACH):
 
     return df_rw, X_train, X_test, y_train, y_test, X, y
 
-df_rw, X_train, X_test, y_train, y_test, X, y = load_data(n_good_bad_samples)
+df_rw, X_train, X_test, y_train, y_test, X, y = load_data(n_good_bad_samples, all_stars)
 
 
 
@@ -169,6 +172,7 @@ if use_example_model:
     payload_transformed = vect.transform([text_input])
 
     output = clf.predict(payload_transformed)[0]
+    proba = clf.predict_proba(payload_transformed)
     st.write("Probability:")
     st.write(pd.DataFrame(clf.predict_proba(payload_transformed), columns = ['prob_Bad', 'prob_Good']))
 
@@ -197,22 +201,28 @@ if use_example_model:
         # GATHER FEEDBACK. Update document if the "target" is incorrect per user feedback!
         st.write("Do you think the prediction is correct? If not, please provide feedback: ")
         # FEEDBACK = (0, 1) dropdown bar (0 for "Bad Review", 1 for "Good Review")
-        feedback = st.selectbox('Pick one', ['Bad Review', 'Good Review'])
+        feedback = st.selectbox('Pick one', ['--', 'Bad Review', 'Good Review'])
         
         if feedback == "Bad Review":
             doc = collection_feedback.find_one_and_update(
             {"text" : text_input, "_id" : ObjectId(x_id)},
             {"$set":
-                {"target": 0}
+                {"target": 0, "proba_bad" : proba[0][0], "proba_good" : proba[0][1]}
             },upsert=True
             )
-        else:
+            st.write('Thank you for your feedback. We will consider this in the next model!')
+
+        elif feedback == "Good Review":
             doc = collection_feedback.find_one_and_update(
             {"text" : text_input, "_id" : ObjectId(x_id)},
             {"$set":
                 {"target": 1}
             },upsert=True
             )
+            st.write('Thank you for your feedback. We will consider this in the next model!')
+
+        else:
+            pass
 
 
         X_train_dtm = vect.fit_transform(X_train)
@@ -243,65 +253,98 @@ else:
     # # Sidebar items:
     st.sidebar.markdown("# Controls")
 
+    n_good_bad_samples = st.sidebar.number_input('Select number of samples for each group:', 1, 200000, 50000)
     pick_model = st.sidebar.selectbox(
     "Pick a Classifier Model: ",
-    ("MultinomialNB", "Logistic Regression"))   
+    ("MultinomialNB", "Logistic_Regression"))   
 
+    # include star ratings for train/test split
+    stars = st.sidebar.multiselect(
+        "Stars", options=all_stars, default=all_stars
+    )
 
     def add_parameter(clf_name):
 
         params = {}
         if pick_model == "MultinomialNB":
-            max_features = st.sidebar.slider("max_features", min_value=1, max_value=10000, value=10000)
+            max_features = st.sidebar.slider("max_features", min_value=1, max_value=20000, value=10000)
             params["max_features"] = max_features
-        elif pick_model == "Logistic Regression":
-            max_features = st.sidebar.slider("max_features", min_value=1, max_value=10000, value=10000)
+        elif pick_model == "Logistic_Regression":
+            max_features = st.sidebar.slider("max_features", min_value=1, max_value=20000, value=10000)
             params["max_features"] = max_features
     
         return params
 
-    df_rw, X_train, X_test, y_train, y_test, X, y = load_data(n_good_bad_samples)
+    df_rw, X_train, X_test, y_train, y_test, X, y = load_data(n_good_bad_samples, all_stars)
 
     params = add_parameter(pick_model)
 
     bigram = st.sidebar.checkbox(
-        "Use Bigrams", True, help="Enable ngram feature: (2,2)"
+        "Use Bigrams", False, help="Enable ngram feature: (2,2)"
+        )
+    trigram = st.sidebar.checkbox(
+        "Use Trigrams", False, help="Enable ngram feature: (3,3)"
         )
     if bigram:
-        params['ngram_range'] = (2,2)
+        params['ngram_range'] = (1,2)
+    elif trigram:
+        params['ngram_range'] = (1,3)
     else:
         params['ngram_range'] = (1,1)
 
-    all_stars = df_rw.stars.unique().tolist()
-    stars = st.sidebar.multiselect(
-        "Stars", options=all_stars, default=all_stars
-    )
+
 
     vect = CountVectorizer(
-                  stop_words="english", 
+                  # stop_words="english", 
                   # analyzer=word_tokenize_lemma_verb,
+                  # tokenizer = LemmaTokenizer(),
                   max_features=params['max_features'],
                   ngram_range=params['ngram_range']
+
             )
 
 
-    def build_model(model):
-        X_train_dtm = vect.fit_transform(X_train)
-        X_test_dtm = vect.transform(X_test)
-        clf = model.fit(X_train_dtm, y_train)
+    def build_model(model, CLF):
+        # X_train_dtm = vect.fit_transform(X_train)
+        # X_test_dtm = vect.transform(X_test)
+        
         st.write("Selected Model: `{}`".format(pick_model))
         y_pred_class = model.predict(X_test_dtm)
         st.write("Dataset shape: `{}`".format(df_rw.shape))
         st.write("Testing Score: ", model.score(X_test_dtm, y_test))
         st.dataframe(confusion_matrix(y_test, y_pred_class))
-        # Create a button for exporting out pickle file!
-        # with open(cwd+'/model_files/custom_classifier', 'wb') as picklefile:
-        #     pickle.dump(clf, picklefile)
+
+        #Derive probabilities of class 1 from the test set
+        test_probs = clf.predict_proba(X_test_dtm)[:,1]
+        #Pass in the test_probs variable and the true test labels aka y_test in the roc_curve function
+        fpr, tpr, thres = metrics.roc_curve(y_test, test_probs)
+        #Plotting False Positive Rates vs the True Positive Rates
+        #Dotted line represents a useless model
+        fig, ax = plt.subplots()
+        plt.plot(fpr, tpr, linewidth= 5, c='c', alpha= 0.5)
+        #Line of randomness
+        plt.plot([0,1], [0,1], "--", alpha=.5, c='m')
+        plt.xlabel("False Positive Rate")
+        plt.ylabel("True Positive Rate")
+        plt.title("ROC Curve")
+        st.pyplot(fig, figsize=(3, 5))
+
+        #Caculate the area under the curve score using roc_auc_score using SKLEARN. only work with Binary Classification
+        auc_score = roc_auc_score(y_test, test_probs)
+        st.write("The Area Under the Curve (AUC) score is: `{}`".format(auc_score))
+
+        folds = st.sidebar.slider("Select nfolds:", 2, 10, 5)
+        #Cross validated roc_auc score
+        cv_score = cross_validate(clf, X_train_dtm, y_train, cv=folds, scoring="roc_auc")
+        st.write("The Cross Validated (at {} folds) Area Under the Curve (AUC) score is: `{}`".format(folds,cv_score['test_score'].mean()))
+
+
         st.write(
         '''
         ## Predict if this is a Good or Bad review:
         '''
         )
+
         text_input = st.text_input("What have you heard about this place?:")
         st.write(text_input)
         a = vect.transform([text_input])
@@ -323,29 +366,39 @@ else:
 
         if output_str == "Bad Review":
 
-            st.write(get_feature_importance(text_input, vect, X_train_dtm, y_train).tail(10).values)
+            st.dataframe(get_feature_importance(text_input, vect, X_train_dtm, y_train).tail(50))
         else:
 
-            st.write(get_feature_importance(text_input, vect, X_train_dtm, y_train).head(10).values)
+            st.dataframe(get_feature_importance(text_input, vect, X_train_dtm, y_train).head(50))
 
+        # Export model files to cwd folder:
+        with open(cwd+'/model_files/{}_custom_classifier'.format(pick_model), 'wb') as picklefile:
+            pickle.dump(clf, picklefile)
 
-
+        with open(cwd+'/model_files/{}_custom_classifier'.format(pick_model), 'wb') as picklefile:
+            pickle.dump(vect, picklefile)
 
     
     if pick_model == "MultinomialNB":
         nb = MultinomialNB()
+        X_train_dtm = vect.fit_transform(X_train)
+        X_test_dtm = vect.transform(X_test)
+        clf = nb.fit(X_train_dtm, y_train)
             # Build custom NB model:
-        build_nb = build_model(nb)
-        
-        
-        with open(cwd+'/model_files/custom_classifier', 'wb') as picklefile:
-            pickle.dump(clf, picklefile)
+        build_nb = build_model(nb, clf)
 
 
-    elif pick_model == "Logistic Regression":
+
+
+    elif pick_model == "Logistic_Regression":
         lr = LogisticRegression()
-        build_lr = build_model(lr)
-        # st.write(vect.get_feature_names()[-10:])
+        X_train_dtm = vect.fit_transform(X_train)
+        X_test_dtm = vect.transform(X_test)
+        clf = lr.fit(X_train_dtm, y_train)
+        build_lr = build_model(lr, clf)
+
+
+        
 
 
 
