@@ -19,6 +19,20 @@ from sklearn.metrics import confusion_matrix
 # import requests
 import matplotlib.pyplot as plt
 
+# from schedule import every, repeat, run_pending
+# import time
+
+# @repeat(every(1).minutes)
+# def job():
+#     # print("I am a scheduled job")
+#     # Create MongoDB scheduler to refresh data load
+
+# while True:
+#     run_pending()
+#     time.sleep(1)
+
+
+
 # https://scikit-learn.org/stable/modules/naive_bayes.html
 
 
@@ -27,7 +41,8 @@ cwd = os.getcwd()
 
 st.set_page_config(
     page_title="Ex-stream-ly Cool App",
-    page_icon="🧊",
+    # page_icon="🧊",
+    page_icon="chart_with_upwards_trend",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -72,10 +87,15 @@ def get_feature_importance(PAYLOAD_TEXT, VECT, X_TRAIN_DTM, Y_TRAIN):
     st.write("Here are the features of importance:")
     return good_features
 
+
 def download_model(model):
+
     output_model = pickle.dumps(model)
     b64 = base64.b64encode(output_model).decode()
-    href = f'<a href="data:file/output_model;base64,{b64}">Download_.pkl</a> (right-click and save as &lt;some_name&gt;.pkl)'
+    if model == clf:
+        href = f'<a href="data:file/output_model;base64,{b64}">Download_clf.pkl</a>'
+    if model == vect:
+        href = f'<a href="data:file/output_model;base64,{b64}">Download_vect.pkl</a>'
     st.markdown(href, unsafe_allow_html=True)
 
 
@@ -86,7 +106,7 @@ def convert_df(df):
 
 
 
-all_stars = ['1.0', '2.0', '3.0', '4.0', 5.0]
+
 
 st.write(
 '''
@@ -109,20 +129,25 @@ db = client.yelpdb
 collection = db.reviews
 
 
-# default samples
+# GLOBALS
 n_good_bad_samples = 25000
+all_stars = [1.0,2.0,3.0,4.0,5.0]
+# good and bad star ratings for creating target variable
+BAD = [1.0,2.0,3.0]
+GOOD = [4.0,5.0]
 
 @st.cache()
 def load_data(NUM_REVIEWS_EACH, STARS):
-    df_rw_good = pd.DataFrame(list(collection.find({"stars":{"$gte":4}}, {"text": 1, 'stars':1}).limit(NUM_REVIEWS_EACH)))
-    df_rw_bad = pd.DataFrame(list(collection.find({"stars":{"$lte":3}}, {"text": 1, 'stars':1}).limit(NUM_REVIEWS_EACH)))
+    df_rw_good = pd.DataFrame(list(collection.find({"stars":{"$in":[k for k in STARS if k in GOOD]}}, {"text": 1, 'stars':1}).limit(NUM_REVIEWS_EACH)))
+    # st.write([k for k in STARS if k in BAD])
+    df_rw_bad = pd.DataFrame(list(collection.find({"stars":{"$in":[k for k in STARS if k in BAD]}}, {"text": 1, 'stars':1}).limit(NUM_REVIEWS_EACH)))
     df_rw = pd.concat([df_rw_bad, df_rw_good], axis=0)
     df_rw.reset_index(inplace=True, drop=True)
     del df_rw_bad
     del df_rw_good
     df_rw = df_rw.astype(str)
-    if len(STARS) < 5:
-        df_rw = df_rw[df_rw.stars.isin[STARS]]
+    # if len(STARS) < 5:
+    #     df_rw = df_rw[df_rw.stars.isin[STARS]]
 
     def good_bad_review(x):
         """
@@ -148,7 +173,7 @@ def load_data(NUM_REVIEWS_EACH, STARS):
 
     return df_rw, X_train, X_test, y_train, y_test, X, y
 
-df_rw, X_train, X_test, y_train, y_test, X, y = load_data(n_good_bad_samples, all_stars)
+
 
 
 
@@ -165,6 +190,8 @@ if use_example_model:
     # clf is a nb classifier. Load pre-trained model files:
     clf = load_classifier()
     vect = load_vect()
+
+    df_rw, X_train, X_test, y_train, y_test, X, y = load_data(n_good_bad_samples, all_stars)
 
     # plot learning curve
     # https://scikit-learn.org/stable/auto_examples/model_selection/plot_learning_curve.html
@@ -252,15 +279,6 @@ if use_example_model:
             st.dataframe(get_feature_importance(text_input, vect, X_train_dtm, y_train).head(50))
 
 
-    # # -- Allow dataframe download. We want to include the 
-    # download = {'Time':bp_cropped.times, 'Strain':bp_cropped.value}
-    # df = pd.DataFrame(download)
-    # csv = df.to_csv(index=False)
-    # b64 = base64.b64encode(csv.encode()).decode()  # some strings <-> bytes conversions necessary here
-    # fn =  detector + '-STRAIN' + '-' + str(int(cropstart)) + '-' + str(int(cropend-cropstart)) + '.csv'
-    # href = f'<a href="data:file/csv;base64,{b64}" download="{fn}">Download Data as CSV File</a>'
-    # st.markdown(href, unsafe_allow_html=True)
-
 
 # BUILD YOUR OWN MODEL SECTION:
 
@@ -291,7 +309,7 @@ else:
     
         return params
 
-    df_rw, X_train, X_test, y_train, y_test, X, y = load_data(n_good_bad_samples, all_stars)
+    df_rw, X_train, X_test, y_train, y_test, X, y = load_data(n_good_bad_samples, stars)
 
     params = add_parameter(pick_model)
 
@@ -338,6 +356,9 @@ else:
         st.write("Selected Model: `{}`".format(pick_model))
         y_pred_class = model.predict(X_test_dtm)
         st.write("Dataset shape: `{}`".format(df_rw.shape))
+        st.write("Train set shape: `{}`".format(X_train_dtm.shape))
+        st.write("Test set shape: `{}`".format(X_test_dtm.shape))
+        st.write("Training Score: ", model.score(X_train_dtm, y_train))
         st.write("Testing Score: ", model.score(X_test_dtm, y_test))
         st.write("Confusion Matrix:")
         st.dataframe(confusion_matrix(y_test, y_pred_class))
@@ -378,47 +399,10 @@ else:
         cv_score = cross_validate(clf, X_train_dtm, y_train, cv=folds, scoring="roc_auc")
         st.write("The Cross Validated (at {} folds) Area Under the Curve (AUC) score is: `{}`".format(folds,cv_score['test_score'].mean()))
 
-        st.write(
-        '''
-        ## Predict if this is a Good or Bad review:
-        '''
-        )
-
-        text_input = st.text_input("What have you heard about this place?:")
-        st.write(text_input)
-        a = vect.transform([text_input])
-
-        output = clf.predict(a)[0]
-        st.write("Probability:")
-        # Return probability estimates for the test vector X.
-        st.write(pd.DataFrame(clf.predict_proba(a), columns = ['prob_Bad', 'prob_Good']))
-        
-        # output_dict = {"Good Review": 1, "Bad Review": 0}
-
-        if output == 1:
-            output_str = "Good Review"
-            st.write("This is a `{}`!".format(output_str))
-        else:
-            output_str = "Bad Review"
-            st.write("This is a `{}`.. 🧐".format(output_str))
-
-
-        if output_str == "Bad Review":
-
-            st.dataframe(get_feature_importance(text_input, vect, X_train_dtm, y_train).tail(50))
-        else:
-
-            st.dataframe(get_feature_importance(text_input, vect, X_train_dtm, y_train).head(50))
-
         # Download pickle files for clf and vect:
+        st.write("Export model files:")
         download_model(clf)
         download_model(vect)
-        # Export model files to cwd folder:
-        # with open(cwd+'/model_files/{}_custom_classifier'.format(pick_model), 'wb') as picklefile:
-        #     pickle.dump(clf, picklefile)
-
-        # with open(cwd+'/model_files/{}_custom_classifier'.format(pick_model), 'wb') as picklefile:
-        #     pickle.dump(vect, picklefile)
 
         # Build a dataframe with mis-classified items for feedback loop
         misses = pd.DataFrame(X_test)
@@ -436,14 +420,89 @@ else:
         test2 = df_rw[df_rw.index.isin(list_ix)]
         csv = convert_df(test1.merge(test2.drop('target', axis=1), how='inner'))
 
-
-        st.write(test2.stars.value_counts(normalize=False))
+        st.write("Export file of mis-classified predictions for re-training:")
+        
         st.download_button(
              label="Download all mis-classified",
              data=csv,
              file_name='misses_feedback.csv',
              mime='text/csv',
- )
+        )
+        st.write("Here are the value counts of stars mis-classified.")
+        st.write(test2.stars.value_counts(normalize=False))
+
+
+        st.write(
+        '''
+        ### Predict if this is a Good or Bad review as payload test:
+        '''
+        )
+
+        ###### CREATE TEXT INPUT FIELD FOR PAYLOAD TESTING ######
+        text_input = st.text_input("What have you heard about this place?:")
+        st.write(text_input)
+        payload_transformed = vect.transform([text_input])
+
+        output = clf.predict(payload_transformed)[0]
+        proba = clf.predict_proba(payload_transformed)
+        st.write("Probability:")
+        st.write(pd.DataFrame(clf.predict_proba(payload_transformed), columns = ['prob_Bad', 'prob_Good']))
+
+        if text_input:
+            if output == 1:
+                output_str = "Good Review"
+                st.write("This is a `{}`!".format(output_str))
+            else:
+                output_str = "Bad Review"
+                st.write("This is a `{}`.. 🧐".format(output_str))
+
+        if text_input:
+            # Do you Agree with the review?
+            # Collect Text Input
+            client = MongoClient()
+            db_feedback = client.yelpdb_feedback
+            collection_feedback = db_feedback.reviews
+
+            mydict = { "text": text_input, "target": output.astype(str)}
+
+            x = collection_feedback.insert_one(mydict)
+            x_id = x.inserted_id
+
+            # GATHER FEEDBACK. Update document if the "target" is incorrect per user feedback!
+            st.write("Do you think the prediction is correct? If not, please provide feedback: ")
+            # FEEDBACK = (0, 1) dropdown bar (0 for "Bad Review", 1 for "Good Review")
+            feedback = st.selectbox('Pick one', ['--', 'Bad Review', 'Good Review'])
+            
+            if feedback == "Bad Review":
+                doc = collection_feedback.find_one_and_update(
+                {"text" : text_input, "_id" : ObjectId(x_id)},
+                {"$set":
+                    {"target": 0, "proba_bad" : proba[0][0], "proba_good" : proba[0][1]}
+                },upsert=True
+                )
+                st.write('Thank you for your feedback. We will consider this in the next model!')
+
+            elif feedback == "Good Review":
+                doc = collection_feedback.find_one_and_update(
+                {"text" : text_input, "_id" : ObjectId(x_id)},
+                {"$set":
+                    {"target": 1}
+                },upsert=True
+                )
+                st.write('Thank you for your feedback. We will consider this in the next model!')
+
+            else:
+                pass
+            # Feature Importance
+            if output_str == "Bad Review":
+
+                st.dataframe(get_feature_importance(text_input, vect, X_train_dtm, y_train).tail(50))
+            else:
+
+                st.dataframe(get_feature_importance(text_input, vect, X_train_dtm, y_train).head(50))
+
+
+
 
 
     
