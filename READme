@@ -16,7 +16,7 @@ make sure that latest model files are within current working directory (cwd) `..
 BASH:
 
 ```
-streamlit run streamlitapp.py &
+streamlit run streamlit_app.py &
 schedule_invoke.py &
 stream_data.py &
 ```
