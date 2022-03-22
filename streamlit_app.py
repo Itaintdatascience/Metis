@@ -111,7 +111,7 @@ Sample the out of the box model that is already pre-trained, or learn how to bui
 client = MongoClient()
 # client.list_database_names()
 db = client.yelpdb
-collection = db.reviews
+collection = db.prod
 
 
 # GLOBALS
