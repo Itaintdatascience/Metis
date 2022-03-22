@@ -19,18 +19,6 @@ from sklearn.metrics import confusion_matrix
 # import requests
 import matplotlib.pyplot as plt
 
-# from schedule import every, repeat, run_pending
-# import time
-
-# @repeat(every(1).minutes)
-# def job():
-#     # print("I am a scheduled job")
-#     # Create MongoDB scheduler to refresh data load
-
-# while True:
-#     run_pending()
-#     time.sleep(1)
-
 
 
 # https://scikit-learn.org/stable/modules/naive_bayes.html
@@ -49,7 +37,7 @@ st.set_page_config(
 
 
 def load_classifier():
-    f = open(cwd+'/model_files/nb_classifier', 'rb')
+    f = open(cwd+'/model_files/nb_classifier_1', 'rb')
     clf = pickle.load(f)
     f.close()
     return clf
@@ -527,6 +515,9 @@ else:
 
         
 
+    elif pick_model == "Spark_Classifier":
+        data = df_rw
+        train, test = data.randomSplit([0.7, 0.3], seed = 42)
 
 
 
@@ -596,113 +587,3 @@ else:
 
 
 
-
-
-
-
-
-#Get the index values of the 3
-# st.write("Selected business is {}, and the categories are {}".format(company_dict[add_selectbox], data.iloc[add_selectbox]['categories']))
-
-# dist_column = df_dist[add_selectbox]
-
-# # st.write(data.iloc[add_selectbox]['categories'])
-
-# closest_index = dist_column.nlargest(5).index[1:].tolist()
-
-# st.write(
-# '''
-# ## 
-# Suggested businesses based on selection:
-# ''')
-# for i in closest_index:
-#         st.write(i)
-#         st.write((data.iloc[i]['name'], ": ", data.iloc[i]['categories']))
-#         st.write('Cosine Similarity Score:', cosine_similarity(dist[add_selectbox].reshape(1,-1), dist[i].reshape(1,-1))[0][0])
-#         st.write()
-
-
-
-## PART 4 - Graphing and Buttons
-#
-# st.write(
-# '''
-# ### Graphing and Buttons
-# Let's graph some of our data with matplotlib. We can also add buttons to add interactivity to our app.
-# '''
-# )
-
-# fig, ax = plt.subplots()
-
-# ax.hist(data['PRICE'])
-# ax.set_title('Distribution of House Prices in $100,000s')
-
-# show_graph = st.checkbox('Show Graph', value=True)
-
-# if show_graph:
-#     st.pyplot(fig)
-
-
-# ## PART 5 - Mapping and Filtering Data
-# #
-# st.write(
-# '''
-# ## Mapping and Filtering Data
-# We can also use Streamlit's built in mapping functionality.
-# Furthermore, we can use a slider to filter for houses within a particular price range.
-# '''
-# )
-
-# price_input = st.slider('House Price Filter', int(data['PRICE'].min()), int(data['PRICE'].max()), 500000 )
-
-# price_filter = data['PRICE'] < price_input
-# st.map(data.loc[price_filter, ['lat', 'lon']])
-
-
-# # PART 6 - Linear Regression Model
-
-# st.write(
-# '''
-# ## Train a Linear Regression Model
-# Now let's create a model to predict a house's price from its square footage and number of bedrooms.
-# '''
-# ) 
-
-
-# from sklearn.linear_model import LinearRegression
-# from sklearn.model_selection import train_test_split
-
-# clean_data = data.dropna(subset=['PRICE', 'SQUARE FEET', 'BEDS'])
-
-# X = clean_data[['SQUARE FEET', 'BEDS']]
-# y = clean_data['PRICE']
-
-# X_train, X_test, y_train, y_test = train_test_split(X, y)
-
-# ## Warning: Using the above code, the R^2 value will continue changing in the app. Remember this file is run upon every update! Set the random_state if you want consistent R^2 results.
-# X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
-
-# lr = LinearRegression()
-# lr.fit(X_train, y_train)
-
-# st.write(f'Test RÂ²: {lr.score(X_test, y_test):.3f}')
-
-
-# # PART 7 - Predictions from User Input
-
-# st.write(
-# '''
-# ## Model Predictions
-# And finally, we can make predictions with our trained model from user input.
-# '''
-# )
-
-# sqft = st.number_input('Square Footage of House', value=2000)
-# beds = st.number_input('Number of Bedrooms', value=3)
-
-# input_data = pd.DataFrame({'sqft': [sqft], 'beds': [beds]})
-# pred = lr.predict(input_data)[0]
-
-# st.write(
-# f'Predicted Sales Price of House: ${int(pred):,}'
-# )
