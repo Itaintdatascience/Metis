@@ -18,9 +18,6 @@ from sklearn.metrics import confusion_matrix
 # from sklearn.metrics.pairwise import cosine_similarity
 # import requests
 import matplotlib.pyplot as plt
-
-
-
 # https://scikit-learn.org/stable/modules/naive_bayes.html
 
 
@@ -160,8 +157,6 @@ def load_data(NUM_REVIEWS_EACH, STARS):
 
 
     return df_rw, X_train, X_test, y_train, y_test, X, y
-
-
 
 
 
@@ -338,7 +333,7 @@ else:
 
 
     def build_model(model, CLF, vect):
-        
+        # Model Summary:
         st.write("Selected Model: `{}`".format(pick_model))
         y_pred_class = model.predict(X_test_dtm)
         st.write("Dataset shape: `{}`".format(df_rw.shape))
@@ -349,7 +344,7 @@ else:
         st.write("Confusion Matrix:")
         st.dataframe(confusion_matrix(y_test, y_pred_class))
 
-
+        # PLOTS for Test
         col1, col2 = st.columns((1,1))
         #Derive probabilities of class 1 from the test set
         test_probs = clf.predict_proba(X_test_dtm)[:,1]

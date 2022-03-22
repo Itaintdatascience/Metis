@@ -21,7 +21,6 @@ client = MongoClient()
 # for i in docs: 
 #     db.reviews.remove(i)
 
-
 db_invoke = client.yelpdb
 collection_invoke = db_invoke.invoke_payloads
 # create new collection for gathering data
@@ -35,7 +34,7 @@ def word_tokenize_lemma_verb(text):
 
 def load_classifier():
     file_name = sorted([k for k in os.listdir(cwd+'/model_files/') if "classifier" in k])
-    print (file_name[-1])
+    # print (file_name[-1])
     path = cwd+'/model_files/{}'.format(file_name[-1])
     f = open(path, 'rb')
     clf = pickle.load(f)
@@ -50,19 +49,20 @@ def load_vect():
     return vect
 
 
-clf, version = load_classifier()
-vect = load_vect()
 
-
-@repeat(every(10).seconds)
+@repeat(every(30).seconds)
 def job():
     """
     Create MongoDB scheduler to refresh data payload to be scored with latest version of classifier model and vectorizer:
     """
     # set MongoDB:
     # client = MongoClient()
-    # print("I am a scheduled job")
+    print("Processed 1 payload")
+    print()
     # read in payload:
+    clf, version = load_classifier()
+    vect = load_vect()
+
     doc = list(collection_invoke.find().limit(1))
     # print (doc)
     payload = doc[0]['text']
@@ -73,7 +73,7 @@ def job():
     # add to results collection
     col_results.insert_one(mydict)
     # remove from invoke list
-    print (mydict)
+    # print (mydict)
     collection_invoke.delete_one(doc[0])
 
 while True:
