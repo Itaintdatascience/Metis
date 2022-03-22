@@ -10,3 +10,13 @@ mongoimport ~/Documents/YELP_DATA/yelp_academic_dataset_review.json -d yelpdb -c
 all EDA done via local port Jupyter Notebook. Preliminary model files also built locally for MVP
 launch `streamlit_app.py` to sample current model files
 make sure that latest model files are within current working directory (cwd) `.../model_files` to run schedule_invoke.py
+
+
+
+BASH:
+
+```
+streamlit run streamlitapp.py &
+schedule_invoke.py &
+stream_data.py &
+```
