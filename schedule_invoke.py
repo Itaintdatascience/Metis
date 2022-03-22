@@ -13,11 +13,18 @@ import json
 cwd = os.getcwd()
 client = MongoClient()
 # import yelp dataset to mongoDB server
-#  mongoimport ~/Downloads/archive/yelp_academic_dataset_review.json -d yelpdb_invoke -c checkin --drop
+#  mongoimport ~/Downloads/archive/yelp_academic_dataset_review.json -d yelpdb -c reviews --drop
+
+# Sample 10k records from reviews dataset for batch unit test 
+# docs = list(db.reviews.aggregate([{'$sample': {'size': 10000}}]))
+# db.invoke_payloads.insert(docs)
+# for i in docs: 
+#     db.reviews.remove(i)
+
 
 db_invoke = client.yelpdb
 collection_invoke = db_invoke.invoke_payloads
-
+# create new collection for gathering data
 col_results = db_invoke.results
 
 
@@ -27,12 +34,13 @@ def word_tokenize_lemma_verb(text):
     return words
 
 def load_classifier():
-    file_name = [k for k in os.listdir(cwd+'/model_files/') if "classifier" in k]
-    path = cwd+'/model_files/{}'.format(file_name)
+    file_name = sorted([k for k in os.listdir(cwd+'/model_files/') if "classifier" in k])
+    print (file_name[-1])
+    path = cwd+'/model_files/{}'.format(file_name[-1])
     f = open(path, 'rb')
     clf = pickle.load(f)
     f.close()
-    return clf, path[-1]
+    return clf, file_name[1]
 
 def load_vect():
     # define a function that accepts text and returns a list of lemons (verb version)
@@ -46,7 +54,6 @@ clf, version = load_classifier()
 vect = load_vect()
 
 
-
 @repeat(every(10).seconds)
 def job():
     """
@@ -54,12 +61,10 @@ def job():
     """
     # set MongoDB:
     # client = MongoClient()
-
-    print("I am a scheduled job")
+    # print("I am a scheduled job")
     # read in payload:
     doc = list(collection_invoke.find().limit(1))
     # print (doc)
-
     payload = doc[0]['text']
     pred = clf.predict(vect.transform([payload]))[0]
     proba_bad, proba_good = clf.predict_proba(vect.transform([payload]))[0]
@@ -68,6 +73,7 @@ def job():
     # add to results collection
     col_results.insert_one(mydict)
     # remove from invoke list
+    print (mydict)
     collection_invoke.delete_one(doc[0])
 
 while True:
@@ -79,12 +85,6 @@ while True:
 
 
 
-# moving files from one collection to the other, then deleting documents
-# docs = list(db.reviews.find().limit(10000))
-# db.test.insert(docs)
-
-# for i in docs: 
-#     db.reviews.remove(i)
 
 
 

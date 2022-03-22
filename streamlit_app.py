@@ -37,7 +37,7 @@ st.set_page_config(
 
 
 def load_classifier():
-    f = open(cwd+'/model_files/nb_classifier_1', 'rb')
+    f = open(cwd+'/model_files/1_nb_classifier', 'rb')
     clf = pickle.load(f)
     f.close()
     return clf
@@ -82,7 +82,7 @@ def download_model(model):
     b64 = base64.b64encode(output_model).decode()
     if model == clf:
         href = f'<a href="data:file/output_model;base64,{b64}">Download_clf.pkl</a>'
-    if model == vect:
+    elif model == vect:
         href = f'<a href="data:file/output_model;base64,{b64}">Download_vect.pkl</a>'
     st.markdown(href, unsafe_allow_html=True)
 
@@ -337,9 +337,7 @@ else:
             )
 
 
-    def build_model(model, CLF):
-        # X_train_dtm = vect.fit_transform(X_train)
-        # X_test_dtm = vect.transform(X_test)
+    def build_model(model, CLF, vect):
         
         st.write("Selected Model: `{}`".format(pick_model))
         y_pred_class = model.predict(X_test_dtm)
@@ -350,7 +348,6 @@ else:
         st.write("Testing Score: ", model.score(X_test_dtm, y_test))
         st.write("Confusion Matrix:")
         st.dataframe(confusion_matrix(y_test, y_pred_class))
-
 
 
         col1, col2 = st.columns((1,1))
@@ -500,7 +497,7 @@ else:
         X_test_dtm = vect.transform(X_test)
         clf = nb.fit(X_train_dtm, y_train)
             # Build custom NB model:
-        build_nb = build_model(nb, clf)
+        build_nb = build_model(nb, clf, vect)
 
 
 
@@ -510,14 +507,14 @@ else:
         X_train_dtm = vect.fit_transform(X_train)
         X_test_dtm = vect.transform(X_test)
         clf = lr.fit(X_train_dtm, y_train)
-        build_lr = build_model(lr, clf)
+        build_lr = build_model(lr, clf, vect)
 
 
         
 
-    elif pick_model == "Spark_Classifier":
-        data = df_rw
-        train, test = data.randomSplit([0.7, 0.3], seed = 42)
+    # elif pick_model == "Spark_Classifier":
+    #     data = df_rw
+    #     train, test = data.randomSplit([0.7, 0.3], seed = 42)
 
 
 
