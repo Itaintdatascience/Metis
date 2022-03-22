@@ -3,19 +3,23 @@ from schedule import every, repeat, run_pending
 from pymongo import MongoClient
 from textblob import TextBlob
 import base64
+from os import listdir
 from bson.objectid import ObjectId
 import pickle
 import time
 import os
+import json
 
 cwd = os.getcwd()
-
+client = MongoClient()
 # import yelp dataset to mongoDB server
 #  mongoimport ~/Downloads/archive/yelp_academic_dataset_review.json -d yelpdb_invoke -c checkin --drop
 
-client = MongoClient()
-db = client[ "testdb" ] # makes a test database called "testdb"
-col = db[ "testcol" ]
+db_invoke = client.yelpdb
+collection_invoke = db_invoke.invoke_payloads
+
+col_results = db_invoke.results
+
 
 def word_tokenize_lemma_verb(text):
     words = TextBlob(text).words
@@ -23,7 +27,8 @@ def word_tokenize_lemma_verb(text):
     return words
 
 def load_classifier():
-    path = cwd+'/model_files/nb_classifier_1'
+    file_name = [k for k in os.listdir(cwd+'/model_files/') if "classifier" in k]
+    path = cwd+'/model_files/{}'.format(file_name)
     f = open(path, 'rb')
     clf = pickle.load(f)
     f.close()
@@ -40,24 +45,31 @@ def load_vect():
 clf, version = load_classifier()
 vect = load_vect()
 
-@repeat(every(2).seconds)
+
+
+@repeat(every(10).seconds)
 def job():
-    print("I am a scheduled job")
+    
     """
     Create MongoDB scheduler to refresh data payload to be scored with latest version of classifier model and vectorizer:
     """
     # set MongoDB:
     # client = MongoClient()
-    # db_invoke = client.yelpdb_invoke
-    # collection_invoke = db_invoke.preds
-    
-    payload = "Stopped by and got the pepperoni fat slice (2 big slices for approx $15) and was fairly disappointed. The crust was super hard and the overall flavor was subpar. I ended up eating only a single slice and threw the other slice away, something I have never done. It's not that it had a terrible flavor but everything about the pizza was lackluster and uninspiring.Maybe it was an off day or they are dealing with some issues bc of covid? If this was a typical night, I would definitely not recommend. It may be a long time if I ever decide to stop by again for some pizza here :("
+
+    print("I am a scheduled job")
+    # read in payload:
+    doc = list(collection_invoke.find().limit(1))
+    # print (doc)
+
+    payload = doc[0]['text']
     pred = clf.predict(vect.transform([payload]))[0]
     proba_bad, proba_good = clf.predict_proba(vect.transform([payload]))[0]
-    mydict = { "text": payload, "proba_bad": proba_bad, "proba_good": proba_good, "pred": pred, "model_version": version}
+    mydict = { "text": payload, "stars": doc[0]['stars'], "model_version": str(version), "proba_bad": str(proba_bad), "proba_good": str(proba_good), "pred": str(pred)}
     mydict["_id"] = str(ObjectId())
-    mydict["_id"] = str(ObjectId())
-    collection_invoke.insert(mydict)
+    # add to results collection
+    col_results.insert_one(mydict)
+    # remove from invoke list
+    collection_invoke.delete_one(doc[0])
 
 while True:
     run_pending()
@@ -65,6 +77,15 @@ while True:
 
 
 
+
+
+
+# moving files from one collection to the other, then deleting documents
+# docs = list(db.reviews.find().limit(10000))
+# db.test.insert(docs)
+
+# for i in docs: 
+#     db.reviews.remove(i)
 
 
 
