@@ -1,0 +1,12 @@
+Steps:
+
+Download data from (https://www.yelp.com/dataset)
+
+set up local database via MongoDB:
+```
+mongoimport ~/Documents/YELP_DATA/yelp_academic_dataset_review.json -d yelpdb -c reviews --drop
+```
+
+all EDA done via local port Jupyter Notebook. Preliminary model files also built locally for MVP
+launch `streamlit_app.py` to sample current model files
+make sure that latest model files are within current working directory (cwd) `.../model_files` to run schedule_invoke.py
