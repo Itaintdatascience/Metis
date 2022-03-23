@@ -1,6 +1,7 @@
 # Stream new data into reviews collection in MongoDB
 from schedule import every, repeat, run_pending
 from pymongo import MongoClient
+import pymongo
 import time
 
 client = MongoClient()
@@ -12,16 +13,27 @@ collection_prod = db.prod
 
 
 
-@repeat(every(60).seconds)
+@repeat(every(30).seconds)
 def job():
     """
     Create MongoDB scheduler to stream data from `reviews` to `production` level data
     """
-    print ('streamed 5000 docs from `reviews` to `prod` collection')
+    
     docs = list(db.reviews.aggregate([{'$sample': {'size': 5000}}]))
-    db.prod.insert(docs)
-    db.reviews.delete_many(docs)
+    # db.prod.insert_many(docs)
+    count=0
+    for i in docs:
 
+        try:
+            db.reviews.delete_one(i)
+            db.prod.insert_one(i)
+
+        except pymongo.errors.DuplicateKeyError:
+            continue
+
+            count+=1
+
+    print ('streamed {} docs from `reviews` to `prod` collection'.format(count))
 
 while True:
     run_pending()

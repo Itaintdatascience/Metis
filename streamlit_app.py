@@ -19,7 +19,7 @@ from sklearn.metrics import confusion_matrix
 # import requests
 import matplotlib.pyplot as plt
 # https://scikit-learn.org/stable/modules/naive_bayes.html
-
+# % cd ~/Documents/GitHub/Project_Proposal/Metis
 
 # Get the current working directory
 cwd = os.getcwd()
@@ -408,7 +408,11 @@ else:
              file_name='misses_feedback.csv',
              mime='text/csv',
         )
-        st.write("Here are the value counts of stars mis-classified.")
+        st.write(
+        """
+        Here are the value counts of stars mis-classified. (*FP and FN, split by star rating*))
+        """
+        )
         st.write(test2.stars.value_counts(normalize=False))
 
 

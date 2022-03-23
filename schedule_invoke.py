@@ -50,7 +50,7 @@ def load_vect():
 
 
 
-@repeat(every(30).seconds)
+@repeat(every(60).seconds)
 def job():
     """
     Create MongoDB scheduler to refresh data payload to be scored with latest version of classifier model and vectorizer:
