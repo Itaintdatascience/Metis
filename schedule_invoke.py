@@ -14,6 +14,7 @@ cwd = os.getcwd()
 client = MongoClient()
 # import yelp dataset to mongoDB server
 #  mongoimport ~/Downloads/archive/yelp_academic_dataset_review.json -d yelpdb -c reviews --drop
+# .find().sort({_id:-1}).limit(1)
 
 # Sample 10k records from reviews dataset for batch unit test 
 # docs = list(db.reviews.aggregate([{'$sample': {'size': 10000}}]))
@@ -50,7 +51,7 @@ def load_vect():
 
 
 
-@repeat(every(60).seconds)
+@repeat(every(10).seconds)
 def job():
     """
     Create MongoDB scheduler to refresh data payload to be scored with latest version of classifier model and vectorizer:
@@ -73,7 +74,7 @@ def job():
     # add to results collection
     col_results.insert_one(mydict)
     # remove from invoke list
-    # print (mydict)
+    print (mydict)
     collection_invoke.delete_one(doc[0])
 
 while True:

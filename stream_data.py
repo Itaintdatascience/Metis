@@ -31,7 +31,7 @@ def job():
         except pymongo.errors.DuplicateKeyError:
             continue
 
-            count+=1
+        count+=1
 
     print ('streamed {} docs from `reviews` to `prod` collection'.format(count))
 
