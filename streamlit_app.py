@@ -1,7 +1,7 @@
 import os
 import pickle
 import numpy as np
-import base64
+# import base64
 import pandas as pd
 import streamlit as st
 # from bson import ObjectId
@@ -63,15 +63,15 @@ vect = CountVectorizer(
 
 
 
-def download_model(model):
+# def download_model(model):
 
-    output_model = pickle.dumps(model)
-    b64 = base64.b64encode(output_model).decode()
-    if model == clf:
-        href = f'<a href="data:file/output_model;base64,{b64}">Download_clf.pkl</a>'
-    elif model == vect:
-        href = f'<a href="data:file/output_model;base64,{b64}">Download_vect.pkl</a>'
-    st.markdown(href, unsafe_allow_html=True)
+#     output_model = pickle.dumps(model)
+#     b64 = base64.b64encode(output_model).decode()
+#     if model == clf:
+#         href = f'<a href="data:file/output_model;base64,{b64}">Download_clf.pkl</a>'
+#     elif model == vect:
+#         href = f'<a href="data:file/output_model;base64,{b64}">Download_vect.pkl</a>'
+#     st.markdown(href, unsafe_allow_html=True)
 
 
 # @st.cache
