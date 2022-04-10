@@ -93,39 +93,57 @@ def load_reviews():
         return a, aa, b, bb
 
 
+# PLOT MODEL PERFORMANCE
+def build_model(model, vect):
+    pick_model = st.checkbox('pick model', value = False)
+    
+    if pick_model:
+        # Model Summary:
+        # X_train_dtm = vect.transform(X_train)
+        X_test_dtm = vect.transform(X_test)
+        y_pred_class = model.predict(X_test_dtm)
+        # st.write("Dataset shape: `{}`".format(df_rw.shape))
+        # st.write("Train set shape: `{}`".format(X_train_dtm.shape))
+        # st.write("Test set shape: `{}`".format(X_test_dtm.shape))
+        # st.write("Training Score: ", model.score(X_train_dtm, y_train))
+        st.write("Testing Score: ", model.score(X_test_dtm, y_test))
+        st.write("Confusion Matrix:")
+        st.dataframe(confusion_matrix(y_test, y_pred_class))
 
-col1, col2 = st.columns((1,5))
-col1.image(cwd+'/yelp_burst.png', width=100)
-col2.write(
-'''
-## Yelp Star Rating Classifier - Yelp Dataset''')
+        # PLOTS for Test
+        col1, col2 = st.columns((1,1))
+        #Derive probabilities of class 1 from the test set
+        test_probs = model.predict_proba(X_test_dtm)[:,1]
+        #Pass in the test_probs variable and the true test labels aka y_test in the roc_curve function
+        fpr, tpr, thres = metrics.roc_curve(y_test, test_probs)
+        #Plotting False Positive Rates vs the True Positive Rates
+        #Dotted line represents a useless model
+        fig1, ax = plt.subplots()
+        plt.plot(fpr, tpr, linewidth= 5, c='c', alpha= 0.5)
+        #Line of randomness
+        plt.plot([0,1], [0,1], "--", alpha=.5, c='m')
+        plt.xlabel("False Positive Rate")
+        plt.ylabel("True Positive Rate")
+        plt.title("ROC Curve")
+        col1.pyplot(fig1, figsize=(1.5, 2.5))
 
-st.write(
-'''
-Maybe you've heard about a restaurant that you've been wanting to try. You've heard comments from friends and family, but don't quite trust their opinion! 
-Given a sample of text, we try to predict if this will be a good or bad review. 
-Sample the out of the box model that is already pre-trained, or learn how to build a text classifier model on your own!
-
-`Hypothesis: Can we predict a good or bad review given a sample of free-form text?`
-
-[Additional info on the dataset](https://yelp.com/dataset/)
-'''
-)
+        fig2, ax = plt.subplots()
+        plt.plot(thres, fpr, linewidth=5, label = "FPR Line", alpha=0.5, c='m')
+        plt.plot(thres, tpr, linewidth=5, label = "TPR line", alpha=0.5, c='c')
+        plt.xlabel("Thresholds")
+        plt.ylabel("False Positive Rate")
+        plt.legend()
+        col2.pyplot(fig2, figsize=(1.5, 1.5))
 
 
-# Connect to MongoDB
-client = MongoClient()
-# client.list_database_names()
-db = client.yelpdb
-collection = db.prod
+        #Caculate the area under the curve score using roc_auc_score using SKLEARN. only work with Binary Classification
+        auc_score = roc_auc_score(y_test, test_probs)
+        st.write("The Area Under the Curve (AUC) score is: `{}`".format(auc_score))
 
+        #Cross validated roc_auc score
+        cv_score = cross_validate(clf, y_train, cv=5, scoring="roc_auc")
+        st.write("The Cross Validated (at {} folds) Area Under the Curve (AUC) score is: `{}`".format(5, cv_score['test_score'].mean()))
 
-# GLOBALS
-n_good_bad_samples = 5000
-all_stars = [1.0,2.0,3.0,4.0,5.0]
-# good and bad star ratings for creating target variable
-BAD = [1.0,2.0,3.0]
-GOOD = [4.0,5.0]
 
 @st.cache()
 def load_data(NUM_REVIEWS_EACH, STARS):
@@ -159,6 +177,46 @@ def load_data(NUM_REVIEWS_EACH, STARS):
 
 
     return df_rw, X_train, X_test, y_train, y_test, X, y
+
+
+
+
+
+
+col1, col2 = st.columns((1,5))
+col1.image(cwd+'/yelp_burst.png', width=100)
+col2.write(
+'''
+## Yelp Star Rating Classifier - Yelp Dataset''')
+
+st.write(
+'''
+Maybe you've heard about a restaurant that you've been wanting to try. You've heard comments from friends and family, but don't quite trust their opinion! 
+Given a sample of text, we try to predict if this will be a good or bad review. 
+Sample the out of the box model that is already pre-trained, or learn how to build a text classifier model on your own!
+
+`Hypothesis: Can we predict a good or bad review given a sample of free-form text?`
+
+[Additional info on the dataset](https://yelp.com/dataset/)
+'''
+)
+
+
+# Connect to MongoDB
+client = MongoClient()
+# client.list_database_names()
+db = client.yelpdb
+collection = db.prod
+
+
+# GLOBALS
+n_good_bad_samples = 10000
+all_stars = [1.0,2.0,3.0,4.0,5.0]
+# good and bad star ratings for creating target variable
+BAD = [1.0,2.0,3.0]
+GOOD = [4.0,5.0]
+
+
 
 
 
@@ -246,7 +304,6 @@ if text_input:
     else:
         pass
 
-    
 
 
 
@@ -254,7 +311,8 @@ if text_input:
 # DEPRECATED
 # BUILD YOUR OWN MODEL SECTION: {SKIP THIS SECTION}
 
-# else:
+
+
 
 #     # # Sidebar items:
 #     st.sidebar.markdown("# Controls")
@@ -487,7 +545,7 @@ if text_input:
 #         clf = nb.fit(X_train_dtm, y_train)
 #             # Build custom NB model:
 #         build_nb = build_model(nb, clf, vect)
-
+    
 
 
 
