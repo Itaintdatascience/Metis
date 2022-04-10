@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 from bson import ObjectId
 from textblob import TextBlob
-from pymongo import MongoClient
+# from pymongo import MongoClient
 from sklearn.feature_extraction.text import CountVectorizer #, TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import LogisticRegression
@@ -203,10 +203,10 @@ Sample the out of the box model that is already pre-trained, or learn how to bui
 
 
 # Connect to MongoDB
-client = MongoClient()
+# client = MongoClient()
 # client.list_database_names()
-db = client.yelpdb
-collection = db.prod
+# db = client.yelpdb
+# collection = db.prod
 
 
 # GLOBALS
@@ -221,23 +221,16 @@ GOOD = [4.0,5.0]
 
 
 
-# use_example_model = st.checkbox(
-#     "Use example model", True, help="Use pre-built example model to demo the app"
-# )
-# If CSV is not uploaded and checkbox is filled, use values from the example file
-# and pass them down to the next if block
-# if use_example_model:
-
-    # clf is a nb classifier. Load pre-trained model files:
+# clf is a nb classifier. Load pre-trained model files:
 clf = load_classifier()
 vect = load_vect()
 
-df_rw, X_train, X_test, y_train, y_test, X, y = load_data(n_good_bad_samples, all_stars)
+# df_rw, X_train, X_test, y_train, y_test, X, y = load_data(n_good_bad_samples, all_stars)
 
 # plot learning curve
 # https://scikit-learn.org/stable/auto_examples/model_selection/plot_learning_curve.html
 
-load_reviews()
+# load_reviews()
 
 st.write(
 '''
@@ -266,43 +259,43 @@ if text_input:
 
 
 
-if text_input:
+# if text_input:
     # Do you Agree with the review?
     # Collect Text Input
-    client = MongoClient()
-    db_feedback = client.yelpdb_feedback
-    collection_feedback = db_feedback.reviews
+    # client = MongoClient()
+    # db_feedback = client.yelpdb_feedback
+    # collection_feedback = db_feedback.reviews
 
-    mydict = { "text": text_input, "target": output.astype(str)}
+    # mydict = { "text": text_input, "target": output.astype(str)}
 
-    x = collection_feedback.insert_one(mydict)
-    x_id = x.inserted_id
+    # x = collection_feedback.insert_one(mydict)
+    # x_id = x.inserted_id
 
     # GATHER FEEDBACK. Update document if the "target" is incorrect per user feedback!
-    st.write("Do you think the prediction is correct? If not, please provide feedback: ")
-    # FEEDBACK = (0, 1) dropdown bar (0 for "Bad Review", 1 for "Good Review")
-    feedback = st.selectbox('Pick one', ['--', 'Bad Review', 'Good Review'])
+    # st.write("Do you think the prediction is correct? If not, please provide feedback: ")
+    # # FEEDBACK = (0, 1) dropdown bar (0 for "Bad Review", 1 for "Good Review")
+    # feedback = st.selectbox('Pick one', ['--', 'Bad Review', 'Good Review'])
     
-    if feedback == "Bad Review":
-        doc = collection_feedback.find_one_and_update(
-        {"text" : text_input, "_id" : ObjectId(x_id)},
-        {"$set":
-            {"target": 0, "proba_bad" : proba[0][0], "proba_good" : proba[0][1]}
-        },upsert=True
-        )
-        st.write('Thank you for your feedback. We will consider this in the next model!')
+    # if feedback == "Bad Review":
+    #     doc = collection_feedback.find_one_and_update(
+    #     {"text" : text_input, "_id" : ObjectId(x_id)},
+    #     {"$set":
+    #         {"target": 0, "proba_bad" : proba[0][0], "proba_good" : proba[0][1]}
+    #     },upsert=True
+    #     )
+    #     st.write('Thank you for your feedback. We will consider this in the next model!')
 
-    elif feedback == "Good Review":
-        doc = collection_feedback.find_one_and_update(
-        {"text" : text_input, "_id" : ObjectId(x_id)},
-        {"$set":
-            {"target": 1}
-        },upsert=True
-        )
-        st.write('Thank you for your feedback. We will consider this in the next model!')
+    # elif feedback == "Good Review":
+    #     doc = collection_feedback.find_one_and_update(
+    #     {"text" : text_input, "_id" : ObjectId(x_id)},
+    #     {"$set":
+    #         {"target": 1}
+    #     },upsert=True
+    #     )
+    #     st.write('Thank you for your feedback. We will consider this in the next model!')
 
-    else:
-        pass
+    # else:
+    #     pass
 
 
 
