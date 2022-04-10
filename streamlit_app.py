@@ -282,7 +282,7 @@ st.text('')
 
 
 
-
+# Sentiment Analysis
 tooltip_text = "`Polarity` measures how happy or mad or a text is on a scale from -1.0 to 1.0. `Subjectivity` measures how strongly opinonated a text is on a scale from 0.0 to 1.0."
 
 # st.write(TextBlob(text_input).sentiment)
@@ -290,8 +290,19 @@ df_sentiment = pd.DataFrame(TextBlob(text_input).sentiment).T
 df_sentiment.columns = ['polarity','subjectivity']
 df_sentiment = df_sentiment.T
 df_sentiment.columns = ['value']
-df_sentiment["Color"] = np.where(df_sentiment["value"]<0, 'negative', 'positive')
-# st.dataframe(df_sentiment)
+df_sentiment = df_sentiment.reset_index()
+
+list_a = []
+for ix, k in df_sentiment.iterrows():
+
+    if (k['index'] == "polarity") & (k['value'] < 0):
+        list_a.append('negative')
+    elif (k['index'] == "subjectivity") & (k['value'] <= 0.5):
+        list_a.append('negative')
+    else:
+        list_a.append('positive')
+
+df_sentiment["Vibe"] =  list_a
 
 
 # # Plot
@@ -300,7 +311,7 @@ fig = px.bar(
         y = 'value',
         title = "Sentiment Analysis",
         text_auto=True,
-        color='Color',   # if values in column z = 'some_group' and 'some_other_group'
+        color='Vibe',   # if values in column z = 'some_group' and 'some_other_group'
         color_discrete_map={
             'negative': 'salmon',
             'positive': 'turquoise'

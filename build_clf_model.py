@@ -32,6 +32,18 @@ vect = CountVectorizer(
             )
 
 
+def get_feature_importance(PAYLOAD_TEXT, VECT, X_TRAIN_DTM, Y_TRAIN):
+
+    featureImportance = pd.DataFrame(data = np.transpose((clf.fit(X_TRAIN_DTM, Y_TRAIN).coef_).astype("float32")), columns = ['featureImportance'], 
+             index=VECT.get_feature_names()).reset_index()
+    featureImportance.columns = ['tokens', 'featureImportance']
+    payload_features = pd.DataFrame(VECT.transform([PAYLOAD_TEXT]).toarray(), columns=VECT.get_feature_names(), index=['values']).T
+    payload_features = payload_features[payload_features.values>0].reset_index()    
+    payload_features.columns = ['tokens', 'values']
+    good_features = featureImportance.merge(payload_features['tokens'], on="tokens", how='inner').sort_values('featureImportance', ascending=False)
+    st.write("Here are the features of importance:")
+    return good_features
+
 
 # Connect to MongoDB
 client = MongoClient()
@@ -41,7 +53,7 @@ collection = db.prod
 
 
 # GLOBALS
-n_good_bad_samples = 100000
+n_good_bad_samples = 50000
 all_stars = [1.0,2.0,3.0,4.0,5.0]
 # good and bad star ratings for creating target variable
 BAD = [1.0,2.0]
@@ -87,6 +99,11 @@ df_rw, X_train, X_test, y_train, y_test, X, y = load_data(n_good_bad_samples, al
 
 X_train_dtm = vect.fit_transform(X_train)
 X_test_dtm = vect.transform(X_test)
+
+
+text_input = "The salad here is pretty good. Dressing isn't too heavy and the portion size is good for its price, but the seasoning on the falafel and shawarma is just okay. This place is good for a casual/affordable lunch. 4 stars for the portion and overall taste but slightly underwhelming and bland seasoning of the meats."
+
+print (get_feature_importance(text_input, vect, X_train_dtm, y_train).tail(50))
 
 nb = MultinomialNB()
 clf = nb.fit(X_train_dtm, y_train)
