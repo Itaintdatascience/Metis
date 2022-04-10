@@ -17,6 +17,8 @@ from sklearn import metrics
 from sklearn.metrics import confusion_matrix
 # from sklearn.metrics.pairwise import cosine_similarity
 import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as go
 # https://scikit-learn.org/stable/modules/naive_bayes.html
 # % cd ~/Documents/GitHub/Project_Proposal/Metis
 
@@ -29,10 +31,11 @@ st.set_page_config(
     # page_icon="🧊",
     page_icon="chart_with_upwards_trend",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    # primaryColor="purple"
 )
 
-
+@st.cache(suppress_st_warning=True)
 def load_classifier():
     file_name = sorted([k for k in os.listdir(cwd+'/model_files/') if "classifier" in k])
     path = cwd+'/model_files/{}'.format(file_name[0])
@@ -41,7 +44,7 @@ def load_classifier():
     f.close()
     return clf
 
-
+@st.cache(suppress_st_warning=True)
 def load_vect():
     # define a function that accepts text and returns a list of lemons (verb version)
     f = open(cwd+'/model_files/vect', 'rb')
@@ -146,7 +149,7 @@ def build_model(model, vect):
         st.write("The Cross Validated (at {} folds) Area Under the Curve (AUC) score is: `{}`".format(5, cv_score['test_score'].mean()))
 
 
-@st.cache()
+@st.cache(suppress_st_warning=True)
 def load_data(NUM_REVIEWS_EACH, STARS):
     df_rw_good = pd.DataFrame(list(collection.find({"stars":{"$in":[k for k in STARS if k in GOOD]}}, {"text": 1, 'stars':1}).limit(NUM_REVIEWS_EACH)))
     # st.write([k for k in STARS if k in BAD])
@@ -188,7 +191,7 @@ col1, col2 = st.columns((1,5))
 col1.image(cwd+'/yelp_burst.png', width=100)
 col2.write(
 '''
-## Yelp Star Rating Classifier - Yelp Dataset''')
+# Yelp Star Rating Classifier - Yelp Dataset''')
 
 st.write(
 '''
@@ -196,7 +199,7 @@ Maybe you've heard about a restaurant that you've been wanting to try. You've he
 Given a sample of text, we try to predict if this will be a good or bad review. 
 Sample the out of the box model that is already pre-trained, or learn how to build a text classifier model on your own!
 
-`Hypothesis: Can we predict a good or bad review given a sample of free-form text?`
+
 
 [Additional info on the dataset](https://yelp.com/dataset/)
 '''
@@ -247,17 +250,96 @@ payload_transformed = vect.transform([text_input])
 
 output = clf.predict(payload_transformed)[0]
 proba = clf.predict_proba(payload_transformed)
-st.write("Probability:")
-st.write(pd.DataFrame(clf.predict_proba(payload_transformed), columns = ['prob_Bad', 'prob_Good']))
+
+st.text('')
+st.text('')
+st.text('')
+st.text('')
+
+col1, col2 = st.columns((1,1))
+col1.write(
+'''
+##### Probability of a Good or Bad Review:
+'''
+)
+col1.dataframe(pd.DataFrame(clf.predict_proba(payload_transformed), columns = ['prob_Bad', 'prob_Good']))
+
 
 if text_input:
     if output == 1:
         output_str = "Good Review"
-        st.write("This is a `{}`!".format(output_str))
+        col2.write("This is a `{}`!".format(output_str))
     else:
         output_str = "Bad Review"
-        st.write("This is a `{}`.. 🧐".format(output_str))
+        col2.write("This is a `{}`.. 🧐".format(output_str))
 
+
+
+st.text('')
+st.text('')
+st.text('')
+st.text('')
+
+
+
+
+tooltip_text = "`Polarity` measures how happy or mad or a text is on a scale from -1.0 to 1.0. `Subjectivity` measures how strongly opinonated a text is on a scale from 0.0 to 1.0."
+
+# st.write(TextBlob(text_input).sentiment)
+df_sentiment = pd.DataFrame(TextBlob(text_input).sentiment).T
+df_sentiment.columns = ['polarity','subjectivity']
+df_sentiment = df_sentiment.T
+df_sentiment.columns = ['value']
+df_sentiment["Color"] = np.where(df_sentiment["value"]<0, 'negative', 'positive')
+# st.dataframe(df_sentiment)
+
+
+# # Plot
+fig = px.bar(        
+        df_sentiment,
+        y = 'value',
+        title = "Sentiment Analysis",
+        text_auto=True,
+        color='Color',   # if values in column z = 'some_group' and 'some_other_group'
+        color_discrete_map={
+            'negative': 'salmon',
+            'positive': 'turquoise'
+        },
+        pattern_shape="value", pattern_shape_sequence=[".", "+"]
+        # uniformtext_mode='hide'
+    )
+
+
+
+fig.update_traces(textposition="outside")
+fig.update_layout(showlegend=False)
+fig.update_yaxes(range = [-1,1], ticks="outside", tickwidth=2, tickcolor='crimson')
+
+col1, col2 = st.columns((1,1))
+
+# col1.write("Polarity: ", TextBlob(text_input).sentiment.polarity)
+# col1.write("Subjectivity: ", TextBlob(text_input).sentiment.subjectivity)
+col1.plotly_chart(fig)
+col2.text('')
+col2.text('')
+col2.text('')
+col2.text('')
+col2.text('')
+col2.text('')
+
+
+col2.write(tooltip_text)
+
+if TextBlob(text_input).subjectivity >= 0.5:
+    subjectivity = "opinionated"
+else:
+    subjectivity = "not opinionated"
+
+if TextBlob(text_input).polarity <= 0:
+    col2.write("This review has `{}` and user is `{}`".format("Negative Vibes", subjectivity))
+
+else:
+    col2.write("This review has `{}` and user is `{}`".format("Positive Vibes", subjectivity))
 
 
 # if text_input:

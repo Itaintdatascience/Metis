@@ -41,7 +41,7 @@ collection = db.prod
 
 
 # GLOBALS
-n_good_bad_samples = 50000
+n_good_bad_samples = 100000
 all_stars = [1.0,2.0,3.0,4.0,5.0]
 # good and bad star ratings for creating target variable
 BAD = [1.0,2.0]
