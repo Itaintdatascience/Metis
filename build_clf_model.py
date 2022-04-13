@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from textblob import TextBlob
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.linear_model import LogisticRegression
+# from sklearn.linear_model import LogisticRegression
 from sklearn.feature_extraction.text import CountVectorizer #, TfidfVectorizer
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
@@ -103,7 +103,7 @@ X_test_dtm = vect.transform(X_test)
 
 text_input = "The salad here is pretty good. Dressing isn't too heavy and the portion size is good for its price, but the seasoning on the falafel and shawarma is just okay. This place is good for a casual/affordable lunch. 4 stars for the portion and overall taste but slightly underwhelming and bland seasoning of the meats."
 
-print (get_feature_importance(text_input, vect, X_train_dtm, y_train).tail(50))
+# print (get_feature_importance(text_input, vect, X_train_dtm, y_train).tail(50))
 
 nb = MultinomialNB()
 clf = nb.fit(X_train_dtm, y_train)
@@ -147,6 +147,17 @@ with open(cwd+'/model_files/{}classifier'.format(VERSION), 'wb') as picklefile:
 with open(cwd+'/model_files/vect', 'wb') as picklefile:
     pickle.dump(vect, picklefile)
 
+def get_feature_importance(CLF, X_train_dtm, y_train, vect):
+    featureImportance = pd.DataFrame(data = np.transpose((CLF.fit(X_train_dtm, y_train).coef_).astype("float32")), 
+        columns = ['featureImportance'], index=vect.get_feature_names()).reset_index()
+    featureImportance = featureImportance.sort_values('featureImportance', ascending=False)
+
+    return featureImportance
+
+
+featureImportance = get_feature_importance(clf, X_train_dtm, y_train, vect)
+featureImportance.to_csv(cwd+'/featureImportance.csv',sep=',')
+print ("Exported featureImportance")
 
 
 print ("Created CLF model")

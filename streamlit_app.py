@@ -65,16 +65,10 @@ vect = CountVectorizer(
             )
 
 
+def load_feat_importance():
+    featureImportance = pd.read_csv(cwd+'/featureImportance.csv')
+    return featureImportance
 
-# def download_model(model):
-
-#     output_model = pickle.dumps(model)
-#     b64 = base64.b64encode(output_model).decode()
-#     if model == clf:
-#         href = f'<a href="data:file/output_model;base64,{b64}">Download_clf.pkl</a>'
-#     elif model == vect:
-#         href = f'<a href="data:file/output_model;base64,{b64}">Download_vect.pkl</a>'
-#     st.markdown(href, unsafe_allow_html=True)
 
 
 # @st.cache
@@ -103,13 +97,8 @@ def build_model(model, vect):
     
     if pick_model:
         # Model Summary:
-        # X_train_dtm = vect.transform(X_train)
         X_test_dtm = vect.transform(X_test)
         y_pred_class = model.predict(X_test_dtm)
-        # st.write("Dataset shape: `{}`".format(df_rw.shape))
-        # st.write("Train set shape: `{}`".format(X_train_dtm.shape))
-        # st.write("Test set shape: `{}`".format(X_test_dtm.shape))
-        # st.write("Training Score: ", model.score(X_train_dtm, y_train))
         st.write("Testing Score: ", model.score(X_test_dtm, y_test))
         st.write("Confusion Matrix:")
         st.dataframe(confusion_matrix(y_test, y_pred_class))
@@ -183,6 +172,28 @@ def load_data(NUM_REVIEWS_EACH, STARS):
     return df_rw, X_train, X_test, y_train, y_test, X, y
 
 
+def get_good_features(featureImportance, PAYLOAD_TEXT, VECT):
+    payload_features = pd.DataFrame(VECT.transform([PAYLOAD_TEXT]).toarray(), columns=VECT.get_feature_names(), index=['values']).T
+    payload_features = payload_features[payload_features.values>0].reset_index()    
+    payload_features.columns = ['tokens', 'values']
+    good_features = featureImportance.merge(payload_features['tokens'], on="tokens", how='inner').sort_values('featureImportance', ascending=False)
+
+    return good_features
+
+
+def get_feat_text(slim, list_string):
+    list_a = []
+
+    for i in list_string:
+
+        if i in slim:
+            p = "`"+str(i)+"`"
+            list_a.append(p)
+        else:
+            list_a.append(i)
+
+    out = " ".join(list_a) 
+    return out
 
 
 
@@ -196,29 +207,13 @@ col2.write(
 st.write(
 '''
 Maybe you've heard about a restaurant that you've been wanting to try. You've heard comments from friends and family, but don't quite trust their opinion! 
-Given a sample of text, we try to predict if this will be a good or bad review. 
-Sample the out of the box model that is already pre-trained, or learn how to build a text classifier model on your own!
-
+Given a sample of text, let's predict if this will be a good or bad review. 
 
 
 [Additional info on the dataset](https://yelp.com/dataset/)
 '''
 )
 
-
-# Connect to MongoDB
-# client = MongoClient()
-# client.list_database_names()
-# db = client.yelpdb
-# collection = db.prod
-
-
-# GLOBALS
-n_good_bad_samples = 10000
-all_stars = [1.0,2.0,3.0,4.0,5.0]
-# good and bad star ratings for creating target variable
-BAD = [1.0,2.0,3.0]
-GOOD = [4.0,5.0]
 
 
 
@@ -228,13 +223,10 @@ GOOD = [4.0,5.0]
 # clf is a nb classifier. Load pre-trained model files:
 clf = load_classifier()
 vect = load_vect()
+featureImportance = load_feat_importance()
+featureImportance.columns = ['index','tokens', 'featureImportance']
+featureImportance = featureImportance.drop('index', axis=1)
 
-# df_rw, X_train, X_test, y_train, y_test, X, y = load_data(n_good_bad_samples, all_stars)
-
-# plot learning curve
-# https://scikit-learn.org/stable/auto_examples/model_selection/plot_learning_curve.html
-
-# load_reviews()
 
 st.write(
 '''
@@ -244,9 +236,14 @@ st.write(
 
 ###### CREATE TEXT INPUT FIELD FOR PAYLOAD TESTING ######
 
-text_input = st.text_input("What have you heard about this place?:")
-st.write(text_input)
+text_input = st.text_area("What have you heard about this place?:", height=150)
+
 payload_transformed = vect.transform([text_input])
+
+list_string = text_input.split(' ')
+slim = [k for k in list_string if k in list(featureImportance['tokens'])]
+
+
 
 output = clf.predict(payload_transformed)[0]
 proba = clf.predict_proba(payload_transformed)
@@ -285,7 +282,6 @@ st.text('')
 # Sentiment Analysis
 tooltip_text = "`Polarity` measures how happy or mad or a text is on a scale from -1.0 to 1.0. `Subjectivity` measures how strongly opinonated a text is on a scale from 0.0 to 1.0."
 
-# st.write(TextBlob(text_input).sentiment)
 df_sentiment = pd.DataFrame(TextBlob(text_input).sentiment).T
 df_sentiment.columns = ['polarity','subjectivity']
 df_sentiment = df_sentiment.T
@@ -311,13 +307,12 @@ fig = px.bar(
         y = 'value',
         title = "Sentiment Analysis",
         text_auto=True,
-        color='Vibe',   # if values in column z = 'some_group' and 'some_other_group'
+        color='Vibe',   
         color_discrete_map={
             'negative': 'salmon',
             'positive': 'turquoise'
         },
         pattern_shape="value", pattern_shape_sequence=[".", "+"]
-        # uniformtext_mode='hide'
     )
 
 
@@ -328,8 +323,7 @@ fig.update_yaxes(range = [-1,1], ticks="outside", tickwidth=2, tickcolor='crimso
 
 col1, col2 = st.columns((1,1))
 
-# col1.write("Polarity: ", TextBlob(text_input).sentiment.polarity)
-# col1.write("Subjectivity: ", TextBlob(text_input).sentiment.subjectivity)
+
 col1.plotly_chart(fig)
 col2.text('')
 col2.text('')
@@ -347,370 +341,32 @@ else:
     subjectivity = "not opinionated"
 
 if TextBlob(text_input).polarity <= 0:
-    col2.write("This review has `{}` and user is `{}`".format("Negative Vibes", subjectivity))
+    col2.write("This review has `{}` and review is `{}`".format("Negative Vibes", subjectivity))
 
 else:
-    col2.write("This review has `{}` and user is `{}`".format("Positive Vibes", subjectivity))
+    col2.write("This review has `{}` and review is `{}`".format("Positive Vibes", subjectivity))
 
 
-# if text_input:
-    # Do you Agree with the review?
-    # Collect Text Input
-    # client = MongoClient()
-    # db_feedback = client.yelpdb_feedback
-    # collection_feedback = db_feedback.reviews
 
-    # mydict = { "text": text_input, "target": output.astype(str)}
+col1, col2 = st.columns((1,1))
+good_features = get_good_features(featureImportance, text_input, vect)
+col1.write("Here are the features of importance:")
 
-    # x = collection_feedback.insert_one(mydict)
-    # x_id = x.inserted_id
+if output == 1:
 
-    # GATHER FEEDBACK. Update document if the "target" is incorrect per user feedback!
-    # st.write("Do you think the prediction is correct? If not, please provide feedback: ")
-    # # FEEDBACK = (0, 1) dropdown bar (0 for "Bad Review", 1 for "Good Review")
-    # feedback = st.selectbox('Pick one', ['--', 'Bad Review', 'Good Review'])
-    
-    # if feedback == "Bad Review":
-    #     doc = collection_feedback.find_one_and_update(
-    #     {"text" : text_input, "_id" : ObjectId(x_id)},
-    #     {"$set":
-    #         {"target": 0, "proba_bad" : proba[0][0], "proba_good" : proba[0][1]}
-    #     },upsert=True
-    #     )
-    #     st.write('Thank you for your feedback. We will consider this in the next model!')
+    col1.dataframe(good_features.sort_values('featureImportance', ascending=False))
 
-    # elif feedback == "Good Review":
-    #     doc = collection_feedback.find_one_and_update(
-    #     {"text" : text_input, "_id" : ObjectId(x_id)},
-    #     {"$set":
-    #         {"target": 1}
-    #     },upsert=True
-    #     )
-    #     st.write('Thank you for your feedback. We will consider this in the next model!')
+else:
+    col1.dataframe(good_features.sort_values('featureImportance', ascending=True))
 
-    # else:
-    #     pass
 
+col2.text('')
+col2.text('')
+col2.caption("Highlighted text are of Feature Importance from the model:")
+col2.write(get_feat_text(slim, list_string))
 
 
 
-
-# DEPRECATED
-# BUILD YOUR OWN MODEL SECTION: {SKIP THIS SECTION}
-
-
-
-
-#     # # Sidebar items:
-#     st.sidebar.markdown("# Controls")
-#     st.sidebar.markdown("Build your own Training Model")
-
-#     n_good_bad_samples = st.sidebar.number_input('Select number of samples for each group:', 1, 200000, 50000)
-#     pick_model = st.sidebar.selectbox(
-#     "Pick a Classifier Model: ",
-#     ("MultinomialNB", "Logistic_Regression"))   
-
-#     # include star ratings for train/test split
-#     stars = st.sidebar.multiselect(
-#         "Stars", options=all_stars, default=all_stars
-#     )
-
-#     def add_parameter(clf_name):
-
-#         params = {}
-#         if pick_model == "MultinomialNB":
-#             max_features = st.sidebar.slider("max_features", min_value=1, max_value=20000, value=10000)
-#             params["max_features"] = max_features
-#         elif pick_model == "Logistic_Regression":
-#             max_features = st.sidebar.slider("max_features", min_value=1, max_value=20000, value=10000)
-#             params["max_features"] = max_features
-    
-#         return params
-
-#     df_rw, X_train, X_test, y_train, y_test, X, y = load_data(n_good_bad_samples, stars)
-
-#     params = add_parameter(pick_model)
-
-
-#     lower = st.sidebar.checkbox(
-#         "Lowercase", False, help="Lowercase tokens before training"
-#         )
-
-#     if lower:
-#         params['lowercase'] = True
-#     else:
-#         params['lowercase'] = False
-
-#     bigram = st.sidebar.checkbox(
-#         "Use Bigrams", False, help="Enable ngram feature: (1,2)"
-#         )
-#     trigram = st.sidebar.checkbox(
-#         "Use Trigrams", False, help="Enable ngram feature: (1,3)"
-#         )
-#     if bigram:
-#         params['ngram_range'] = (1,2)
-#     elif trigram:
-#         params['ngram_range'] = (1,3)
-#     else:
-#         params['ngram_range'] = (1,1)
-
-
-
-#     vect = CountVectorizer(
-#                   # stop_words="english", 
-#                   # analyzer=word_tokenize_lemma_verb,
-#                   # tokenizer = LemmaTokenizer(),
-#                   lowercase = params['lowercase'],
-#                   max_features=params['max_features'],
-#                   ngram_range=params['ngram_range']
-
-#             )
-
-
-#     def build_model(model, CLF, vect):
-#         # Model Summary:
-#         st.write("Selected Model: `{}`".format(pick_model))
-#         y_pred_class = model.predict(X_test_dtm)
-#         st.write("Dataset shape: `{}`".format(df_rw.shape))
-#         st.write("Train set shape: `{}`".format(X_train_dtm.shape))
-#         st.write("Test set shape: `{}`".format(X_test_dtm.shape))
-#         st.write("Training Score: ", model.score(X_train_dtm, y_train))
-#         st.write("Testing Score: ", model.score(X_test_dtm, y_test))
-#         st.write("Confusion Matrix:")
-#         st.dataframe(confusion_matrix(y_test, y_pred_class))
-
-#         # PLOTS for Test
-#         col1, col2 = st.columns((1,1))
-#         #Derive probabilities of class 1 from the test set
-#         test_probs = clf.predict_proba(X_test_dtm)[:,1]
-#         #Pass in the test_probs variable and the true test labels aka y_test in the roc_curve function
-#         fpr, tpr, thres = metrics.roc_curve(y_test, test_probs)
-#         #Plotting False Positive Rates vs the True Positive Rates
-#         #Dotted line represents a useless model
-#         fig1, ax = plt.subplots()
-#         plt.plot(fpr, tpr, linewidth= 5, c='c', alpha= 0.5)
-#         #Line of randomness
-#         plt.plot([0,1], [0,1], "--", alpha=.5, c='m')
-#         plt.xlabel("False Positive Rate")
-#         plt.ylabel("True Positive Rate")
-#         plt.title("ROC Curve")
-#         col1.pyplot(fig1, figsize=(1.5, 2.5))
-
-#         fig2, ax = plt.subplots()
-#         plt.plot(thres, fpr, linewidth=5, label = "FPR Line", alpha=0.5, c='m')
-#         plt.plot(thres, tpr, linewidth=5, label = "TPR line", alpha=0.5, c='c')
-#         plt.xlabel("Thresholds")
-#         plt.ylabel("False Positive Rate")
-#         plt.legend()
-#         col2.pyplot(fig2, figsize=(1.5, 2.5))
-
-
-#         #Caculate the area under the curve score using roc_auc_score using SKLEARN. only work with Binary Classification
-#         auc_score = roc_auc_score(y_test, test_probs)
-#         st.write("The Area Under the Curve (AUC) score is: `{}`".format(auc_score))
-
-#         folds = st.sidebar.slider("Select nfolds for Cross Validation:", 2, 10, 5)
-#         #Cross validated roc_auc score
-#         cv_score = cross_validate(clf, X_train_dtm, y_train, cv=folds, scoring="roc_auc")
-#         st.write("The Cross Validated (at {} folds) Area Under the Curve (AUC) score is: `{}`".format(folds,cv_score['test_score'].mean()))
-
-#         # Download pickle files for clf and vect:
-#         st.write("Export model files:")
-#         download_model(clf)
-#         download_model(vect)
-
-#         # Build a dataframe with mis-classified items for feedback loop
-#         misses = pd.DataFrame(X_test)
-#         misses['proba_bad'] = clf.predict_proba(X_test_dtm)[:,0]
-#         misses['proba_good'] = clf.predict_proba(X_test_dtm)[:,1]
-#         misses['pred'] = y_pred_class
-#         misses['actual'] = y_test
-#         list_ix = []
-#         for ix, k in misses.iterrows():
-#             if k['actual'] != k['pred']:
-#                 list_ix.append(ix)
-#         list_ix = list(set(list_ix))
-#         test1 = misses[misses.index.isin(list_ix)]
-#         test1.sort_index(inplace=True)
-#         test2 = df_rw[df_rw.index.isin(list_ix)]
-#         csv = convert_df(test1.merge(test2.drop('target', axis=1), how='inner'))
-
-#         st.write("Export file of mis-classified predictions for re-training:")
-        
-#         st.download_button(
-#              label="Download all mis-classified",
-#              data=csv,
-#              file_name='misses_feedback.csv',
-#              mime='text/csv',
-#         )
-#         st.write(
-#         """
-#         Here are the value counts of stars mis-classified. (*FP and FN, split by star rating*))
-#         """
-#         )
-#         st.write(test2.stars.value_counts(normalize=False))
-
-
-#         st.write(
-#         '''
-#         ### Predict if this is a Good or Bad review as payload test:
-#         '''
-#         )
-
-#         ###### CREATE TEXT INPUT FIELD FOR PAYLOAD TESTING ######
-#         text_input = st.text_input("What have you heard about this place?:")
-#         st.write(text_input)
-#         payload_transformed = vect.transform([text_input])
-
-#         output = clf.predict(payload_transformed)[0]
-#         proba = clf.predict_proba(payload_transformed)
-#         st.write("Probability:")
-#         st.write(pd.DataFrame(clf.predict_proba(payload_transformed), columns = ['prob_Bad', 'prob_Good']))
-
-#         if text_input:
-#             if output == 1:
-#                 output_str = "Good Review"
-#                 st.write("This is a `{}`!".format(output_str))
-#             else:
-#                 output_str = "Bad Review"
-#                 st.write("This is a `{}`.. 🧐".format(output_str))
-
-#         if text_input:
-#             # Do you Agree with the review?
-#             # Collect Text Input
-#             client = MongoClient()
-#             db_feedback = client.yelpdb_feedback
-#             collection_feedback = db_feedback.reviews
-
-#             mydict = { "text": text_input, "target": output.astype(str)}
-
-#             x = collection_feedback.insert_one(mydict)
-#             x_id = x.inserted_id
-
-#             # GATHER FEEDBACK. Update document if the "target" is incorrect per user feedback!
-#             st.write("Do you think the prediction is correct? If not, please provide feedback: ")
-#             # FEEDBACK = (0, 1) dropdown bar (0 for "Bad Review", 1 for "Good Review")
-#             feedback = st.selectbox('Pick one', ['--', 'Bad Review', 'Good Review'])
-            
-#             if feedback == "Bad Review":
-#                 doc = collection_feedback.find_one_and_update(
-#                 {"text" : text_input, "_id" : ObjectId(x_id)},
-#                 {"$set":
-#                     {"target": 0, "proba_bad" : proba[0][0], "proba_good" : proba[0][1]}
-#                 },upsert=True
-#                 )
-#                 st.write('Thank you for your feedback. We will consider this in the next model!')
-
-#             elif feedback == "Good Review":
-#                 doc = collection_feedback.find_one_and_update(
-#                 {"text" : text_input, "_id" : ObjectId(x_id)},
-#                 {"$set":
-#                     {"target": 1}
-#                 },upsert=True
-#                 )
-#                 st.write('Thank you for your feedback. We will consider this in the next model!')
-
-#             else:
-#                 pass
-#             # Feature Importance
-#             if output_str == "Bad Review":
-
-#                 st.dataframe(get_feature_importance(text_input, vect, X_train_dtm, y_train).tail(50))
-#             else:
-
-#                 st.dataframe(get_feature_importance(text_input, vect, X_train_dtm, y_train).head(50))
-
-
-
-
-
-    
-#     if pick_model == "MultinomialNB":
-#         nb = MultinomialNB()
-#         X_train_dtm = vect.fit_transform(X_train)
-#         X_test_dtm = vect.transform(X_test)
-#         clf = nb.fit(X_train_dtm, y_train)
-#             # Build custom NB model:
-#         build_nb = build_model(nb, clf, vect)
-    
-
-
-
-#     elif pick_model == "Logistic_Regression":
-#         lr = LogisticRegression()
-#         X_train_dtm = vect.fit_transform(X_train)
-#         X_test_dtm = vect.transform(X_test)
-#         clf = lr.fit(X_train_dtm, y_train)
-#         build_lr = build_model(lr, clf, vect)
-
-
-        
-
-    # elif pick_model == "Spark_Classifier":
-    #     data = df_rw
-    #     train, test = data.randomSplit([0.7, 0.3], seed = 42)
-
-        # CONNECT TO STARS in SIDEBAR
-        # plot_df = _df[_df.lang.isin(langs)]
-        # plot_df["stars"] = plot_df.stars.divide(1000).round(1)
-
-        # chart = (
-        #     alt.Chart(
-        #         plot_df,
-        #         title="Static site generators popularity",
-        #     )
-        #     .mark_bar()
-        #     .encode(
-        #         x=alt.X("stars", title="'000 stars on Github"),
-        #         y=alt.Y(
-        #             "name",
-        #             sort=alt.EncodingSortField(field="stars", order="descending"),
-        #             title="",
-        #         ),
-        #         color=alt.Color(
-        #             "lang",
-        #             legend=alt.Legend(title="Language"),
-        #             scale=alt.Scale(scheme="category10"),
-        #         ),
-        #         tooltip=["name", "stars", "lang"],
-        #     )
-        # )
-
-
-        # st.altair_chart(chart, use_container_width=True)
-
-
-
-
-
-
-
-
-    # st.write(
-    # '''
-    # ### How to adjust model parameters to get even smarter...
-
-
-
-    # 2nd LEVEL ADD FEEDBACK LOOP.. 
-    # This was a miss. how to re-learn (what was wrong about this?)
-
-    # "i love the everything but the kitchen sink pizza"..
-
-
-    # Create an auto-update ID for each unique row to append
-    # check in MongoDB
-
-    # User imput of columns
-    # - read if you already have a row for this, if not.. then add in a simple "update feedback" 
-
-    # - unique text comment vs. text id..
-
-    # - Feature Importance (NB)??? What does it look like for the Text Input?
-    # https://blog.ineuron.ai/Feature-Importance-in-Naive-Bayes-Classifiers-5qob5d5sFW#:~:text=The%20naive%20bayes%20classifers%20don,class%20with%20the%20highest%20probability.
-
-    # '''
-    # )
 
 
 
